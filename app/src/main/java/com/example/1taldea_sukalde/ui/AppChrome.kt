@@ -30,7 +30,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import com.example.osiskitchen.R
+import com.example.osislogin.R
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
