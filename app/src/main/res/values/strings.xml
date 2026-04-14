@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">OSIS Service</string>
+    <string name="login_title">Saio Hasiera</string>
+    <string name="email_hint">Erabiltzailea</string>
+    <string name="password_hint">Pasahitza</string>
+    <string name="login_button">Sartu</string>
+    <string name="home_title">Ongi etorri!</string>
+    <string name="logout_button">Saioa Itxi</string>
+    <string name="invalid_credentials">Datuak ez dira zuzenak</string>
+    <string name="loading">Kargatzen...</string>
+</resources>
