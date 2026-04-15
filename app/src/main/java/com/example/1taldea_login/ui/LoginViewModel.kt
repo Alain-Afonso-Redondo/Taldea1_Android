@@ -1,4 +1,4 @@
-package com.example.osislogin.ui
+    package com.example.osislogin.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -47,9 +47,9 @@ data class LoginUiState(
 class LoginViewModel(
     private val database: AppDatabase,
     private val sessionManager: SessionManager
-) : ViewModel() {
+) : ViewModel() {   
 
-    private val apiBaseUrlLanPrimary = "http://192.168.2.101:5000/api"
+    private val apiBaseUrlLanPrimary = "http://172.16.237.29:5093/api"
 
     private val _uiState = MutableStateFlow(LoginUiState())
     val uiState: StateFlow<LoginUiState> = _uiState
@@ -168,36 +168,15 @@ class LoginViewModel(
 
                 val result = withContext(Dispatchers.IO) { postLogin(erabiltzailea, pasahitza) }
 
-                when (result) {
-                    "OK" -> {
-                        sessionManager.saveUserSession(erabiltzailea, user.displayName)
-                        _uiState.value = _uiState.value.copy(
-                            isLoading = false,
-                            isSuccess = true,
-                            showPinDialog = false
-                        )
-                    }
-                    "BAD_CREDENTIALS" -> {
-                        _uiState.value = _uiState.value.copy(
-                            isLoading = false,
-                            error = "Erabiltzaile edo pasahitz okerra",
-                            pin = ""
-                        )
-                    }
-                    "NO_PERMISSION" -> {
-                        _uiState.value = _uiState.value.copy(
-                            isLoading = false,
-                            error = "Ez duzu baimenik sartzeko",
-                            pin = ""
-                        )
-                    }
-                    else -> {
-                        _uiState.value = _uiState.value.copy(
-                            isLoading = false,
-                            error = "Error al validar credenciales"
-                        )
-                    }
-                }
+                sessionManager.saveUserSession(
+                    result.userName.ifBlank { erabiltzailea },
+                    result.displayName.ifBlank { user.displayName }
+                )
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    isSuccess = true,
+                    showPinDialog = false
+                )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -256,7 +235,7 @@ class LoginViewModel(
      * Intenta login con API primero, si falla usa login local
      */
     fun loginWithApi() {
-        val erabiltzailea = _uiState.value.email
+        val erabiltzailea = _uiState.value.email.trim()
         val pasahitza = _uiState.value.password
 
         viewModelScope.launch {
@@ -264,34 +243,28 @@ class LoginViewModel(
             try {
                 val result = withContext(Dispatchers.IO) { postLogin(erabiltzailea, pasahitza) }
 
-                when (result) {
-                    "OK" -> {
-                        sessionManager.saveUserSession(erabiltzailea, erabiltzailea)
-                        _uiState.value = _uiState.value.copy(
-                            isLoading = false,
-                            isSuccess = true
-                        )
-                    }
-                    "BAD_CREDENTIALS" -> {
-                        _uiState.value = _uiState.value.copy(
-                            isLoading = false,
-                            error = "Erabiltzaile edo pasahitz okerra"
-                        )
-                    }
-                    "NO_PERMISSION" -> {
-                        _uiState.value = _uiState.value.copy(
-                            isLoading = false,
-                            error = "Ez duzu baimenik sartzeko"
-                        )
-                    }
-                    else -> {
-                        // Si falla la API, intentar login local
-                        login()
-                    }
-                }
+                sessionManager.saveUserSession(
+                    result.userName.ifBlank { erabiltzailea },
+                    result.displayName.ifBlank { result.userName.ifBlank { erabiltzailea } }
+                )
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    isSuccess = true,
+                    error = null
+                )
             } catch (e: Exception) {
-                // Si hay error de red, intentar login local
-                login()
+                val isConnectError = e is ConnectException ||
+                    e is SocketTimeoutException ||
+                    (e.message?.contains("failed to connect", ignoreCase = true) == true)
+                val suffix = if (isConnectError) {
+                    " (revisa Wi-Fi/subred, servidor escuchando 0.0.0.0:5093 y firewall)"
+                } else {
+                    ""
+                }
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = "${e.message ?: "Error de conexión"}$suffix"
+                )
             }
         }
     }
@@ -305,6 +278,8 @@ class LoginViewModel(
 
         for (baseUrl in apiBaseUrlCandidates()) {
             val candidateUrls = listOf(
+                "$baseUrl/erabiltzaileak/login",
+                "$baseUrl/Erabiltzaileak/login",
                 "$baseUrl/Erabiltzailea",
                 "$baseUrl/erabiltzailea"
             )
@@ -330,19 +305,7 @@ class LoginViewModel(
 
                     val users = parseUsers(body)
                     if (users.isEmpty()) continue
-
-                    val langileMap = runCatching { fetchLangileakFromApi() }.getOrNull().orEmpty()
-                    val enriched = users.map { user ->
-                        val fallback = user.langileaId?.let { langileMap[it] }
-                        if (fallback == null) user
-                        else user.copy(
-                            displayName = if (user.displayName == user.username) fallback.displayName else user.displayName,
-                            lanpostuaId = user.lanpostuaId ?: fallback.lanpostuaId
-                        )
-                    }
-
-                    val filtered = enriched.filter { it.lanpostuaId == 2 }
-                    return filtered
+                    return users
                 } catch (e: Exception) {
                     lastException = IllegalStateException("Ezin izan da konektatu $candidateUrl: ${e.message ?: e.javaClass.simpleName}", e)
                 }
@@ -358,6 +321,8 @@ class LoginViewModel(
             is JSONArray -> root
             is JSONObject -> {
                 root.optJSONArray("users")
+                    ?: root.optJSONArray("datuak")
+                    ?: root.optJSONArray("Datuak")
                     ?: root.optJSONArray("data")
                     ?: root.optJSONArray("result")
                     ?: root.optJSONArray("erabiltzaileak")
@@ -380,7 +345,13 @@ class LoginViewModel(
                                 "erabiltzailea",
                                 element.optString(
                                     "Erabiltzailea",
-                                    element.optString("username", element.optString("email", element.optString("name", "")))
+                                    element.optString(
+                                        "username",
+                                        element.optString(
+                                            "email",
+                                            element.optString("emaila", element.optString("name", ""))
+                                        )
+                                    )
                                 )
                             )
                         )
@@ -412,8 +383,17 @@ class LoginViewModel(
                         langilea.optString("izena", langilea.optString("Izena", "")).trim().ifBlank { username }
                     } else {
                         element.optString(
-                            "fullName",
-                            element.optString("full_name", element.optString("displayName", username))
+                            "displayName",
+                            element.optString(
+                                "fullName",
+                                element.optString(
+                                    "full_name",
+                                    element.optString(
+                                        "erabiltzailea",
+                                        element.optString("Erabiltzailea", username)
+                                    )
+                                )
+                            )
                         )
                     }
 
@@ -508,45 +488,82 @@ class LoginViewModel(
         return result
     }
 
-    private fun postLogin(erabiltzailea: String, pasahitza: String): String {
+    private data class LoginApiResult(
+        val userName: String,
+        val displayName: String
+    )
+
+    private fun postLogin(erabiltzailea: String, pasahitza: String): LoginApiResult {
         var lastException: Exception? = null
-        for (baseUrl in apiBaseUrlCandidates()) {
-            try {
-                val candidateUrls = listOf(
-                    "$baseUrl/Login/tpv",
-                    "$baseUrl/login/tpv",
-                    "$baseUrl/Login",
-                    "$baseUrl/login"
+        val candidateUrls =
+            apiBaseUrlCandidates().flatMap { baseUrl ->
+                listOf(
+                    "$baseUrl/login",
+                    "$baseUrl/Login"
                 )
+            }.distinct()
 
-                for (candidateUrl in candidateUrls) {
-                    val url = URL(candidateUrl)
-                    val conn = (url.openConnection() as HttpURLConnection).apply {
-                        requestMethod = "POST"
-                        setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                        setRequestProperty("Accept", "application/json")
-                        doOutput = true
-                        connectTimeout = 15000
-                        readTimeout = 15000
-                    }
-
-                    val jsonBody = "{ \"erabiltzailea\": \"$erabiltzailea\", \"pasahitza\": \"$pasahitza\" }"
-                    conn.outputStream.use { os ->
-                        os.write(jsonBody.toByteArray(Charsets.UTF_8))
-                    }
-
-                    val code = conn.responseCode
-                    val stream = if (code in 200..299) conn.inputStream else conn.errorStream
-                    val body = stream.bufferedReader().use { it.readText() }
-
-                    when {
-                        code == 200 -> return "OK"
-                        body.contains("Erabiltzaile edo pasahitz okerra") -> return "BAD_CREDENTIALS"
-                        body.contains("Ez duzu baimenik", ignoreCase = true) || body.contains("Admin baimena", ignoreCase = true) -> return "NO_PERMISSION"
-                        code == 404 -> continue
-                        else -> lastException = IllegalStateException("HTTP $code $candidateUrl helbidean: ${body.take(200)}")
-                    }
+        for (candidateUrl in candidateUrls) {
+            try {
+                val url = URL(candidateUrl)
+                val conn = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                    setRequestProperty("Accept", "application/json")
+                    doOutput = true
+                    connectTimeout = 15000
+                    readTimeout = 15000
                 }
+
+                val requestBody = JSONObject()
+                    .put("erabiltzailea", erabiltzailea)
+                    .put("pasahitza", pasahitza)
+                    .put("txat", false)
+                    .toString()
+
+                conn.outputStream.use { os ->
+                    os.write(requestBody.toByteArray(Charsets.UTF_8))
+                }
+
+                val code = conn.responseCode
+                val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+                val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+
+                if (code == 401) {
+                    throw IllegalStateException("Erabiltzaile edo pasahitz okerra")
+                }
+
+                if (code !in 200..299) {
+                    lastException = IllegalStateException("HTTP $code $candidateUrl helbidean: ${body.take(200)}")
+                    continue
+                }
+
+                val root = JSONTokener(body).nextValue() as? JSONObject
+                    ?: throw IllegalStateException("Login erantzun baliogabea")
+                val dataArray = root.optJSONArray("datuak") ?: root.optJSONArray("Datuak") ?: JSONArray()
+                val userObject = dataArray.optJSONObject(0)
+                    ?: throw IllegalStateException("Login erantzunak ez du erabiltzaile daturik")
+
+                val userName =
+                    userObject.optString(
+                        "erabiltzailea",
+                        userObject.optString("Erabiltzailea", "")
+                    ).trim()
+                val email =
+                    userObject.optString(
+                        "emaila",
+                        userObject.optString("Emaila", "")
+                    ).trim()
+
+                val displayName = userName.ifBlank { email }
+                if (displayName.isBlank()) {
+                    throw IllegalStateException("Login erantzunak ez du erabiltzaile izenik")
+                }
+
+                return LoginApiResult(
+                    userName = userName.ifBlank { email },
+                    displayName = displayName
+                )
             } catch (e: Exception) {
                 lastException = e
             }
@@ -556,6 +573,13 @@ class LoginViewModel(
     }
 
     private fun apiBaseUrlCandidates(): List<String> {
-        return listOf(apiBaseUrlLanPrimary)
+        val base = apiBaseUrlLanPrimary.trimEnd('/')
+        val noApi =
+            if (base.endsWith("/api")) {
+                base.removeSuffix("/api").trimEnd('/')
+            } else {
+                base
+            }
+        return listOf(base, noApi).distinct()
     }
 }
