@@ -49,6 +49,10 @@ fun PlaterakScreen(
     tableId: Int,
     fakturaId: Int,
     kategoriId: Int,
+    komensalak: Int,
+    erreserbaId: Int?,
+    data: String,
+    txanda: String,
     viewModel: PlaterakViewModel,
     onLogout: () -> Unit,
     onChat: () -> Unit,
@@ -59,8 +63,16 @@ fun PlaterakScreen(
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.screenWidthDp >= configuration.screenHeightDp
 
-    LaunchedEffect(tableId, fakturaId, kategoriId) {
-        viewModel.load(tableId = tableId, fakturaId = fakturaId, kategoriId = kategoriId)
+    LaunchedEffect(tableId, fakturaId, kategoriId, komensalak, erreserbaId, data, txanda) {
+        viewModel.load(
+            tableId = tableId,
+            fakturaId = fakturaId,
+            kategoriId = kategoriId,
+            komensalak = komensalak,
+            erreserbaId = erreserbaId,
+            data = data,
+            txanda = txanda
+        )
     }
 
     DisposableEffect(Unit) {

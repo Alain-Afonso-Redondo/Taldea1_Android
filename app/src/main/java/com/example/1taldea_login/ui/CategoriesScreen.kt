@@ -34,19 +34,31 @@ import com.example.osislogin.R
 @Composable
 fun CategoriesScreen(
     tableId: Int,
+    komensalak: Int,
+    erreserbaId: Int?,
+    data: String,
+    txanda: String,
     viewModel: CategoriesViewModel,
     onLogout: () -> Unit,
     onChat: () -> Unit,
     chatUnreadCount: Int,
     onBack: () -> Unit,
-    onCategorySelected: (tableId: Int, fakturaId: Int, kategoriId: Int) -> Unit
+    onCategorySelected: (
+        tableId: Int,
+        fakturaId: Int,
+        kategoriId: Int,
+        komensalak: Int,
+        erreserbaId: Int?,
+        data: String,
+        txanda: String
+    ) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var goBackAfterClose by remember { mutableStateOf(false) }
     var showClosePreviewDialog by remember { mutableStateOf(false) }
 
-    LaunchedEffect(tableId) {
-        viewModel.load(tableId)
+    LaunchedEffect(tableId, komensalak, erreserbaId, data, txanda) {
+        viewModel.load(tableId, komensalak, erreserbaId, data, txanda)
     }
 
     AppChrome(
@@ -204,7 +216,15 @@ fun CategoriesScreen(
                                     .clickable {
                                         val s = session ?: return@clickable
                                         if (s.requiresDecision) return@clickable
-                                        onCategorySelected(tableId, s.fakturaId, category.id)
+                                        onCategorySelected(
+                                            tableId,
+                                            s.fakturaId,
+                                            category.id,
+                                            uiState.guestCount ?: komensalak,
+                                            s.erreserbaId,
+                                            s.data,
+                                            s.txanda
+                                        )
                                     }
                         ) {
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -238,6 +258,7 @@ fun CategoriesScreen(
                                     .shadow(elevation = elevation, shape = shape)
                                     .clickable {
                                         val s = session ?: return@clickable
+                                        if (s.fakturaId <= 0) return@clickable
                                         if (s.requiresDecision) return@clickable
                                         showClosePreviewDialog = true
                                         viewModel.loadClosePreview(s.fakturaId)

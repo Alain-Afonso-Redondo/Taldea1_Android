@@ -26,12 +26,21 @@ import kotlinx.coroutines.launch
 sealed class Route(val route: String) {
     object Login : Route("login")
     object Home : Route("home")
-    object Categories : Route("categories/{tableId}") {
-        fun create(tableId: Int) = "categories/$tableId"
+    object Categories : Route("categories/{tableId}/{komensalak}/{erreserbaId}/{data}/{txanda}") {
+        fun create(tableId: Int, komensalak: Int, erreserbaId: Int?, data: String, txanda: String) =
+                "categories/$tableId/$komensalak/${erreserbaId ?: -1}/$data/$txanda"
     }
-    object Platerak : Route("platerak/{tableId}/{fakturaId}/{kategoriId}") {
-        fun create(tableId: Int, fakturaId: Int, kategoriId: Int) =
-                "platerak/$tableId/$fakturaId/$kategoriId"
+    object Platerak : Route("platerak/{tableId}/{fakturaId}/{kategoriId}/{komensalak}/{erreserbaId}/{data}/{txanda}") {
+        fun create(
+            tableId: Int,
+            fakturaId: Int,
+            kategoriId: Int,
+            komensalak: Int,
+            erreserbaId: Int?,
+            data: String,
+            txanda: String
+        ) =
+                "platerak/$tableId/$fakturaId/$kategoriId/$komensalak/${erreserbaId ?: -1}/$data/$txanda"
     }
     object Chat : Route("chat")
 }
@@ -81,27 +90,51 @@ fun AppNavigation(database: AppDatabase, sessionManager: SessionManager, startDe
                     onLogout = logoutAndGoToLogin,
                     onChat = { navController.navigate(Route.Chat.route) },
                     chatUnreadCount = chatUiState.unreadCount,
-                    onTableClick = { tableId ->
-                        navController.navigate(Route.Categories.create(tableId))
+                    onTableClick = { tableId, komensalak, erreserbaId, data, txanda ->
+                        navController.navigate(Route.Categories.create(tableId, komensalak, erreserbaId, data, txanda))
                     }
             )
         }
 
         composable(
                 route = Route.Categories.route,
-                arguments = listOf(navArgument("tableId") { type = NavType.IntType })
+                arguments = listOf(
+                    navArgument("tableId") { type = NavType.IntType },
+                    navArgument("komensalak") { type = NavType.IntType },
+                    navArgument("erreserbaId") { type = NavType.IntType },
+                    navArgument("data") { type = NavType.StringType },
+                    navArgument("txanda") { type = NavType.StringType }
+                )
         ) { backStackEntry ->
             val tableId = backStackEntry.arguments?.getInt("tableId") ?: 0
-            val viewModel = remember { CategoriesViewModel() }
+            val komensalak = backStackEntry.arguments?.getInt("komensalak") ?: 1
+            val erreserbaId = (backStackEntry.arguments?.getInt("erreserbaId") ?: -1).takeIf { it > 0 }
+            val data = backStackEntry.arguments?.getString("data").orEmpty()
+            val txanda = backStackEntry.arguments?.getString("txanda").orEmpty()
+            val viewModel = remember { CategoriesViewModel(sessionManager) }
             CategoriesScreen(
                     tableId = tableId,
+                    komensalak = komensalak,
+                    erreserbaId = erreserbaId,
+                    data = data,
+                    txanda = txanda,
                     viewModel = viewModel,
                     onLogout = logoutAndGoToLogin,
                     onChat = { navController.navigate(Route.Chat.route) },
                     chatUnreadCount = chatUiState.unreadCount,
                     onBack = { navController.popBackStack() },
-                    onCategorySelected = { tId, fakturaId, kategoriId ->
-                        navController.navigate(Route.Platerak.create(tId, fakturaId, kategoriId))
+                    onCategorySelected = { tId, fakturaId, kategoriId, selectedKomensalak, selectedErreserbaId, selectedData, selectedTxanda ->
+                        navController.navigate(
+                            Route.Platerak.create(
+                                tId,
+                                fakturaId,
+                                kategoriId,
+                                selectedKomensalak,
+                                selectedErreserbaId,
+                                selectedData,
+                                selectedTxanda
+                            )
+                        )
                     }
             )
         }
@@ -112,24 +145,36 @@ fun AppNavigation(database: AppDatabase, sessionManager: SessionManager, startDe
                         listOf(
                                 navArgument("tableId") { type = NavType.IntType },
                                 navArgument("fakturaId") { type = NavType.IntType },
-                                navArgument("kategoriId") { type = NavType.IntType }
+                                navArgument("kategoriId") { type = NavType.IntType },
+                                navArgument("komensalak") { type = NavType.IntType },
+                                navArgument("erreserbaId") { type = NavType.IntType },
+                                navArgument("data") { type = NavType.StringType },
+                                navArgument("txanda") { type = NavType.StringType }
                         )
         ) { backStackEntry ->
             val tableId = backStackEntry.arguments?.getInt("tableId") ?: 0
             val fakturaId = backStackEntry.arguments?.getInt("fakturaId") ?: 0
             val kategoriId = backStackEntry.arguments?.getInt("kategoriId") ?: 0
-            val viewModel = remember { PlaterakViewModel() }
+            val komensalak = backStackEntry.arguments?.getInt("komensalak") ?: 1
+            val erreserbaId = (backStackEntry.arguments?.getInt("erreserbaId") ?: -1).takeIf { it > 0 }
+            val data = backStackEntry.arguments?.getString("data").orEmpty()
+            val txanda = backStackEntry.arguments?.getString("txanda").orEmpty()
+            val viewModel = remember { PlaterakViewModel(sessionManager) }
             PlaterakScreen(
                     tableId = tableId,
                     fakturaId = fakturaId,
                     kategoriId = kategoriId,
+                    komensalak = komensalak,
+                    erreserbaId = erreserbaId,
+                    data = data,
+                    txanda = txanda,
                     viewModel = viewModel,
                     onLogout = logoutAndGoToLogin,
                     onChat = { navController.navigate(Route.Chat.route) },
                     chatUnreadCount = chatUiState.unreadCount,
                     onBack = {
                         if (!navController.popBackStack()) {
-                            navController.navigate(Route.Categories.create(tableId)) {
+                            navController.navigate(Route.Categories.create(tableId, komensalak, erreserbaId, data, txanda)) {
                                 launchSingleTop = true
                             }
                         }

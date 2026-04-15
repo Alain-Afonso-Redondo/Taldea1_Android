@@ -1,5 +1,6 @@
 package com.example.osislogin.ui
 
+import android.app.DatePickerDialog
 import android.content.res.Configuration
 import android.widget.Toast
 import androidx.compose.foundation.Image
@@ -13,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material3.Button
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,6 +31,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.osislogin.R
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import kotlin.math.ceil
@@ -42,10 +45,12 @@ fun HomeScreen(
     onLogout: () -> Unit,
     onChat: () -> Unit,
     chatUnreadCount: Int,
-    onTableClick: (Int) -> Unit
+    onTableClick: (tableId: Int, komensalak: Int, erreserbaId: Int?, data: String, txanda: String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    var guestDialogTable by remember { mutableStateOf<Mahaia?>(null) }
+    var guestInput by remember { mutableStateOf("1") }
 
     LaunchedEffect(Unit) { viewModel.loadTables() }
     LaunchedEffect(uiState.error) {
@@ -53,6 +58,7 @@ fun HomeScreen(
     }
 
     val dateTimeFormatter = remember { SimpleDateFormat("dd/MM/yyyy  HH:mm", Locale.getDefault()) }
+    val selectedDateFormatter = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()) }
     var now by remember { mutableStateOf(Date()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -104,6 +110,52 @@ fun HomeScreen(
                         tint = freeColor
                 )
             }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedButton(
+                onClick = {
+                    val current = runCatching {
+                        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(uiState.selectedDateYmd)
+                    }.getOrNull() ?: Date()
+                    val calendar = Calendar.getInstance().apply { time = current }
+                    DatePickerDialog(
+                        context,
+                        { _, year, month, dayOfMonth ->
+                            val picked = Calendar.getInstance().apply {
+                                set(year, month, dayOfMonth, 0, 0, 0)
+                                set(Calendar.MILLISECOND, 0)
+                            }
+                            val ymd = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(picked.time)
+                            viewModel.updateSelectedDate(ymd)
+                        },
+                        calendar.get(Calendar.YEAR),
+                        calendar.get(Calendar.MONTH),
+                        calendar.get(Calendar.DAY_OF_MONTH)
+                    ).show()
+                }
+            ) {
+                val displayDate = runCatching {
+                    val parsed = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(uiState.selectedDateYmd)
+                    selectedDateFormatter.format(parsed ?: Date())
+                }.getOrElse { uiState.selectedDateYmd }
+                Text(text = displayDate)
+            }
+
+            FilterChip(
+                selected = uiState.selectedTxanda == "Bazkaria",
+                onClick = { viewModel.updateSelectedTxanda("Bazkaria") },
+                label = { Text("Bazkaria") }
+            )
+            FilterChip(
+                selected = uiState.selectedTxanda == "Afaria",
+                onClick = { viewModel.updateSelectedTxanda("Afaria") },
+                label = { Text("Afaria") }
+            )
         }
 
         BoxWithConstraints(modifier = Modifier.weight(1f)) {
@@ -161,7 +213,21 @@ fun HomeScreen(
                                     gridPaddingVertical = gridPaddingVertical,
                                     freeColor = freeColor,
                                     occupiedColor = occupiedColor,
-                                    onTableClick = onTableClick,
+                                    onTableClick = { table ->
+                                        val guests = table.pertsonaKopurua ?: table.pertsonaMax
+                                        if (table.erreserbaId != null || table.isOccupied) {
+                                            onTableClick(
+                                                table.id,
+                                                guests.coerceAtLeast(1),
+                                                table.erreserbaId,
+                                                uiState.selectedDateYmd,
+                                                uiState.selectedTxanda
+                                            )
+                                        } else {
+                                            guestDialogTable = table
+                                            guestInput = "1"
+                                        }
+                                    },
                                     centerVertically = true,
                                     userScrollEnabled = false,
                                     modifier =
@@ -248,7 +314,21 @@ fun HomeScreen(
                             gridPaddingVertical = gridPaddingVertical,
                             freeColor = freeColor,
                             occupiedColor = occupiedColor,
-                            onTableClick = onTableClick,
+                            onTableClick = { table ->
+                                val guests = table.pertsonaKopurua ?: table.pertsonaMax
+                                if (table.erreserbaId != null || table.isOccupied) {
+                                    onTableClick(
+                                        table.id,
+                                        guests.coerceAtLeast(1),
+                                        table.erreserbaId,
+                                        uiState.selectedDateYmd,
+                                        uiState.selectedTxanda
+                                    )
+                                } else {
+                                    guestDialogTable = table
+                                    guestInput = "1"
+                                }
+                            },
                             centerVertically = true,
                             userScrollEnabled = true,
                             modifier = Modifier.fillMaxSize()
@@ -344,6 +424,59 @@ fun HomeScreen(
             }
         }
     }
+
+    guestDialogTable?.let { table ->
+        AlertDialog(
+            onDismissRequest = { guestDialogTable = null },
+            title = { Text("Komensalak") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Zenbat komensal izango dira mahai honetan?")
+                    Text("Gehienez ${table.pertsonaMax} pertsona")
+                    OutlinedTextField(
+                        value = guestInput,
+                        onValueChange = { value ->
+                            guestInput = value.filter { it.isDigit() }.take(2)
+                        },
+                        singleLine = true,
+                        label = { Text("Komensalak") }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val guests = guestInput.toIntOrNull()
+                        when {
+                            guests == null || guests <= 0 -> {
+                                Toast.makeText(context, "Sartu komensal kopuru zuzena", Toast.LENGTH_LONG).show()
+                            }
+                            guests > table.pertsonaMax -> {
+                                Toast.makeText(
+                                    context,
+                                    "Mahai honek gehienez ${table.pertsonaMax} pertsona onartzen ditu",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                            else -> {
+                                guestDialogTable = null
+                                onTableClick(
+                                    table.id,
+                                    guests,
+                                    null,
+                                    uiState.selectedDateYmd,
+                                    uiState.selectedTxanda
+                                )
+                            }
+                        }
+                    }
+                ) { Text("Jarraitu") }
+            },
+            dismissButton = {
+                TextButton(onClick = { guestDialogTable = null }) { Text("Utzi") }
+            }
+        )
+    }
 }
 
 private sealed interface GridEntry {
@@ -360,13 +493,11 @@ private fun TableGrid(
         gridPaddingVertical: Dp,
         freeColor: Color,
         occupiedColor: Color,
-        onTableClick: (Int) -> Unit,
+        onTableClick: (Mahaia) -> Unit,
         centerVertically: Boolean,
         userScrollEnabled: Boolean,
         modifier: Modifier
 ) {
-    val context = LocalContext.current
-
     LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
             userScrollEnabled = userScrollEnabled,
@@ -410,19 +541,11 @@ private fun TableGrid(
                             color = bg,
                             shape = RoundedCornerShape(14.dp),
                             modifier =
-                                    Modifier
+                                            Modifier
                                             .fillMaxWidth()
                                             .aspectRatio(aspect)
                                             .clickable {
-                                                if (table.isOccupied) {
-                                                    onTableClick(table.id)
-                                                } else {
-                                                    Toast.makeText(
-                                                        context,
-                                                        "Mahaiak ez dauka erreserbarik txanda honetan",
-                                                        Toast.LENGTH_LONG
-                                                    ).show()
-                                                }
+                                                onTableClick(table)
                                             }
                     ) {
                         Column(

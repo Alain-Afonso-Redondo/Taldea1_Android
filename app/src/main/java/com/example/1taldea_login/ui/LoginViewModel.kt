@@ -112,7 +112,7 @@ class LoginViewModel(
                 if (user != null) {
                     val hashingUtil = HashingUtil()
                     if (hashingUtil.verifyPassword(_uiState.value.pin, user.pin)) {
-                        sessionManager.saveUserSession(user.email, user.fullName)
+                        sessionManager.saveUserSession(user.email, user.fullName, user.id)
                         _uiState.value = _uiState.value.copy(
                             isLoading = false,
                             isSuccess = true,
@@ -170,7 +170,8 @@ class LoginViewModel(
 
                 sessionManager.saveUserSession(
                     result.userName.ifBlank { erabiltzailea },
-                    result.displayName.ifBlank { user.displayName }
+                    result.displayName.ifBlank { user.displayName },
+                    user.id
                 )
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -204,7 +205,7 @@ class LoginViewModel(
                 if (user != null) {
                     val hashingUtil = HashingUtil()
                     if (hashingUtil.verifyPassword(_uiState.value.password, user.password)) {
-                        sessionManager.saveUserSession(user.email, user.fullName)
+                        sessionManager.saveUserSession(user.email, user.fullName, user.id)
                         _uiState.value = _uiState.value.copy(
                             isLoading = false,
                             isSuccess = true
@@ -245,7 +246,8 @@ class LoginViewModel(
 
                 sessionManager.saveUserSession(
                     result.userName.ifBlank { erabiltzailea },
-                    result.displayName.ifBlank { result.userName.ifBlank { erabiltzailea } }
+                    result.displayName.ifBlank { result.userName.ifBlank { erabiltzailea } },
+                    result.userId
                 )
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -489,6 +491,7 @@ class LoginViewModel(
     }
 
     private data class LoginApiResult(
+        val userId: Int?,
         val userName: String,
         val displayName: String
     )
@@ -543,6 +546,11 @@ class LoginViewModel(
                 val dataArray = root.optJSONArray("datuak") ?: root.optJSONArray("Datuak") ?: JSONArray()
                 val userObject = dataArray.optJSONObject(0)
                     ?: throw IllegalStateException("Login erantzunak ez du erabiltzaile daturik")
+                val userId =
+                    userObject.optInt(
+                        "id",
+                        userObject.optInt("Id", -1)
+                    ).takeIf { it > 0 }
 
                 val userName =
                     userObject.optString(
@@ -561,6 +569,7 @@ class LoginViewModel(
                 }
 
                 return LoginApiResult(
+                    userId = userId,
                     userName = userName.ifBlank { email },
                     displayName = displayName
                 )

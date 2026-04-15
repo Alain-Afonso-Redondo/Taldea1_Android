@@ -1,5 +1,6 @@
 package com.example.osislogin.ui
 
+import com.example.osislogin.util.SessionManager
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
@@ -7,6 +8,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -46,13 +48,20 @@ data class PlaterakUiState(
     val pendingNotesByPlateraId: Map<Int, String?> = emptyMap()
 )
 
-class PlaterakViewModel : ViewModel() {
-    private val apiBaseUrlLanPrimary = "http://192.168.2.101:5000/api"
+class PlaterakViewModel(
+    private val sessionManager: SessionManager
+) : ViewModel() {
+    private val apiBaseUrlLanPrimary = "http://172.16.237.29:5093/api"
     private val apiBaseCandidates = listOf(apiBaseUrlLanPrimary)
 
     private val _uiState = MutableStateFlow(PlaterakUiState())
     val uiState: StateFlow<PlaterakUiState> = _uiState
     private var autoRefreshJob: Job? = null
+    private var currentTableId: Int = 0
+    private var currentKomensalak: Int = 1
+    private var currentErreserbaId: Int? = null
+    private var currentData: String = ""
+    private var currentTxanda: String = "Bazkaria"
 
     private data class TableInfo(val label: String?, val guestCount: Int?)
 
@@ -69,26 +78,59 @@ class PlaterakViewModel : ViewModel() {
         return null
     }
 
-    fun load(tableId: Int, fakturaId: Int, kategoriId: Int) {
+    fun load(
+        tableId: Int,
+        fakturaId: Int,
+        kategoriId: Int,
+        komensalak: Int,
+        erreserbaId: Int?,
+        data: String,
+        txanda: String
+    ) {
         viewModelScope.launch {
             try {
-                _uiState.value = _uiState.value.copy(isLoading = true, error = null, fakturaId = fakturaId, kategoriId = kategoriId)
+                currentTableId = tableId
+                currentKomensalak = komensalak.coerceAtLeast(1)
+                currentErreserbaId = erreserbaId
+                currentData = data
+                currentTxanda = txanda
+                val resolvedFakturaId =
+                    withContext(Dispatchers.IO) {
+                        if (fakturaId > 0) {
+                            fakturaId
+                        } else {
+                            fetchActiveEskaera(tableId, data, txanda)
+                                ?.let { fetchFakturaIdByEskaeraId(it.eskaeraId) }
+                                ?: 0
+                        }
+                    }
+
+                _uiState.value = _uiState.value.copy(
+                    isLoading = true,
+                    error = null,
+                    fakturaId = resolvedFakturaId,
+                    kategoriId = kategoriId
+                )
                 val tableInfo =
                     withContext(Dispatchers.IO) {
                         runCatching { fetchTableInfoFromMahaiak(tableId) }.getOrElse { TableInfo(label = null, guestCount = null) }
                     }
                 val platerak = withContext(Dispatchers.IO) { fetchPlaterak(kategoriId) }
-                val komandak = withContext(Dispatchers.IO) { fetchKomandak(fakturaId) }
+                val komandak = withContext(Dispatchers.IO) { fetchKomandak(resolvedFakturaId) }
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     tableLabel = tableInfo.label,
-                    guestCount = tableInfo.guestCount,
+                    guestCount = komensalak.takeIf { it > 0 } ?: tableInfo.guestCount,
                     platerak = platerak,
                     komandakByPlateraId = komandak.groupBy { it.platerakId },
                     pendingQtyByPlateraId = emptyMap(),
                     pendingNotesByPlateraId = emptyMap()
                 )
-                startAutoRefresh(fakturaId = fakturaId, kategoriId = kategoriId)
+                if (resolvedFakturaId > 0) {
+                    startAutoRefresh(fakturaId = resolvedFakturaId, kategoriId = kategoriId)
+                } else {
+                    stopAutoRefresh()
+                }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isLoading = false, error = e.message ?: e.javaClass.simpleName)
             }
@@ -130,7 +172,12 @@ class PlaterakViewModel : ViewModel() {
         val array =
             when (root) {
                 is JSONArray -> root
-                is JSONObject -> root.optJSONArray("mahaiak") ?: root.optJSONArray("Mahaiak") ?: JSONArray()
+                is JSONObject ->
+                    root.optJSONArray("datuak")
+                        ?: root.optJSONArray("Datuak")
+                        ?: root.optJSONArray("mahaiak")
+                        ?: root.optJSONArray("Mahaiak")
+                        ?: JSONArray()
                 else -> JSONArray()
             }
 
@@ -170,6 +217,8 @@ class PlaterakViewModel : ViewModel() {
                     obj.has("pertsonaKopurua") -> obj.optInt("pertsonaKopurua", -1)
                     obj.has("pertsona_kopurua") -> obj.optInt("pertsona_kopurua", -1)
                     obj.has("PertsonaKopurua") -> obj.optInt("PertsonaKopurua", -1)
+                    obj.has("kapazitatea") -> obj.optInt("kapazitatea", -1)
+                    obj.has("Kapazitatea") -> obj.optInt("Kapazitatea", -1)
                     else -> -1
                 }
             val guestCount = guestCountRaw.takeIf { it > 0 }
@@ -186,6 +235,10 @@ class PlaterakViewModel : ViewModel() {
     }
 
     private fun startAutoRefresh(fakturaId: Int, kategoriId: Int) {
+        if (fakturaId <= 0) {
+            stopAutoRefresh()
+            return
+        }
         autoRefreshJob?.cancel()
         autoRefreshJob =
             viewModelScope.launch {
@@ -214,9 +267,6 @@ class PlaterakViewModel : ViewModel() {
     }
 
     fun changeQuantity(plateraId: Int, delta: Int) {
-        val fakturaId = _uiState.value.fakturaId
-        if (fakturaId <= 0) return
-
         viewModelScope.launch {
             try {
                 val komandak = _uiState.value.komandakByPlateraId[plateraId].orEmpty()
@@ -255,12 +305,7 @@ class PlaterakViewModel : ViewModel() {
     }
 
     fun commitPendingChanges(onDone: () -> Unit) {
-        val fakturaId = _uiState.value.fakturaId
         val kategoriId = _uiState.value.kategoriId
-        if (fakturaId <= 0) {
-            onDone()
-            return
-        }
         viewModelScope.launch {
             val pendingQty = _uiState.value.pendingQtyByPlateraId
             val pendingNotes = _uiState.value.pendingNotesByPlateraId
@@ -270,36 +315,53 @@ class PlaterakViewModel : ViewModel() {
             }
             try {
                 _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-                withContext(Dispatchers.IO) {
-                    val touched = (pendingQty.keys + pendingNotes.keys).toSet()
-                    for (platerakId in touched) {
-                        val komandak = fetchKomandak(fakturaId).filter { it.platerakId == platerakId }
-                        val committedTotal = komandak.sumOf { it.kopurua }
-                        val desiredTotal = pendingQty[platerakId] ?: committedTotal
-                        applyDesiredTotalQuantity(fakturaId = fakturaId, platerakId = platerakId, desiredTotal = desiredTotal)
+                var effectiveFakturaId = _uiState.value.fakturaId
+                if (effectiveFakturaId <= 0) {
+                    effectiveFakturaId =
+                        withContext(Dispatchers.IO) {
+                            createInitialEskaeraAndResolveFaktura(
+                                pendingQty = pendingQty,
+                                pendingNotes = pendingNotes
+                            )
+                        }
+                } else {
+                    withContext(Dispatchers.IO) {
+                        val touched = (pendingQty.keys + pendingNotes.keys).toSet()
+                        for (platerakId in touched) {
+                            val komandak = fetchKomandak(effectiveFakturaId).filter { it.platerakId == platerakId }
+                            val committedTotal = komandak.sumOf { it.kopurua }
+                            val desiredTotal = pendingQty[platerakId] ?: committedTotal
+                            applyDesiredTotalQuantity(
+                                fakturaId = effectiveFakturaId,
+                                platerakId = platerakId,
+                                desiredTotal = desiredTotal
+                            )
 
-                        val note = pendingNotes[platerakId]?.trim().orEmpty()
-                        if (note.isNotBlank()) {
-                            val updated = fetchKomandak(fakturaId).filter { it.platerakId == platerakId }
-                            val target = updated.maxByOrNull { it.id }
-                            if (target != null) {
-                                putOharrak(komanda = target, oharrak = note)
+                            val note = pendingNotes[platerakId]?.trim().orEmpty()
+                            if (note.isNotBlank()) {
+                                val updated = fetchKomandak(effectiveFakturaId).filter { it.platerakId == platerakId }
+                                val target = updated.maxByOrNull { it.id }
+                                if (target != null) {
+                                    putOharrak(komanda = target, oharrak = note)
+                                }
                             }
                         }
                     }
                 }
 
                 val refreshedPlaterak = withContext(Dispatchers.IO) { fetchPlaterak(kategoriId) }
-                val refreshedKomandak = withContext(Dispatchers.IO) { fetchKomandak(fakturaId) }
+                val refreshedKomandak = withContext(Dispatchers.IO) { fetchKomandak(effectiveFakturaId) }
                 _uiState.value =
                     _uiState.value.copy(
                         isLoading = false,
                         error = null,
+                        fakturaId = effectiveFakturaId,
                         platerak = refreshedPlaterak,
                         komandakByPlateraId = refreshedKomandak.groupBy { it.platerakId },
                         pendingQtyByPlateraId = emptyMap(),
                         pendingNotesByPlateraId = emptyMap()
                     )
+                startAutoRefresh(fakturaId = effectiveFakturaId, kategoriId = kategoriId)
                 onDone()
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isLoading = false, error = e.message ?: e.javaClass.simpleName)
@@ -345,7 +407,11 @@ class PlaterakViewModel : ViewModel() {
         val root = JSONTokener(finalBody).nextValue()
         val array = when (root) {
             is JSONArray -> root
-            is JSONObject -> root.optJSONArray("platerak") ?: JSONArray()
+            is JSONObject ->
+                root.optJSONArray("datuak")
+                    ?: root.optJSONArray("Datuak")
+                    ?: root.optJSONArray("platerak")
+                    ?: JSONArray()
             else -> JSONArray()
         }
 
@@ -365,7 +431,184 @@ class PlaterakViewModel : ViewModel() {
         return result
     }
 
+    private data class ActiveEskaeraInfo(val eskaeraId: Int)
+
+    private fun fetchActiveEskaera(tableId: Int, data: String, txanda: String): ActiveEskaeraInfo? {
+        val candidates = apiBaseCandidates.flatMap { base ->
+            listOf(
+                "$base/eskaerak/mahaia/$tableId/aktiboa?data=$data&txanda=$txanda",
+                "$base/Eskaerak/mahaia/$tableId/aktiboa?data=$data&txanda=$txanda"
+            )
+        }
+
+        for (candidateUrl in candidates) {
+            try {
+                val url = URL(candidateUrl)
+                val conn = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    setRequestProperty("Accept", "application/json")
+                    connectTimeout = 15000
+                    readTimeout = 15000
+                }
+                val code = conn.responseCode
+                val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+                val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                if (code == 404) return null
+                if (code !in 200..299) continue
+
+                val root = runCatching { JSONTokener(body).nextValue() }.getOrNull()
+                val array = when (root) {
+                    is JSONArray -> root
+                    is JSONObject -> root.optJSONArray("datuak") ?: root.optJSONArray("Datuak") ?: JSONArray()
+                    else -> JSONArray()
+                }
+                val obj = array.optJSONObject(0) ?: continue
+                val eskaeraId = obj.optInt("id", obj.optInt("Id", -1))
+                if (eskaeraId > 0) return ActiveEskaeraInfo(eskaeraId)
+            } catch (_: Exception) {
+            }
+        }
+
+        return null
+    }
+
+    private fun fetchFakturaIdByEskaeraId(eskaeraId: Int): Int? {
+        val candidates = apiBaseCandidates.flatMap { base ->
+            listOf(
+                "$base/fakturak",
+                "$base/Fakturak"
+            )
+        }
+
+        for (candidateUrl in candidates) {
+            try {
+                val url = URL(candidateUrl)
+                val conn = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    setRequestProperty("Accept", "application/json")
+                    connectTimeout = 15000
+                    readTimeout = 15000
+                }
+                val code = conn.responseCode
+                val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+                val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                if (code !in 200..299) continue
+
+                val root = runCatching { JSONTokener(body).nextValue() }.getOrNull()
+                val array = when (root) {
+                    is JSONArray -> root
+                    is JSONObject ->
+                        root.optJSONArray("datuak")
+                            ?: root.optJSONArray("Datuak")
+                            ?: root.optJSONArray("fakturak")
+                            ?: root.optJSONArray("Fakturak")
+                            ?: JSONArray()
+                    else -> JSONArray()
+                }
+                var bestId: Int? = null
+                for (i in 0 until array.length()) {
+                    val obj = array.optJSONObject(i) ?: continue
+                    val currentEskaeraId = obj.optInt("eskaeraId", obj.optInt("EskaeraId", -1))
+                    if (currentEskaeraId != eskaeraId) continue
+                    val currentId = obj.optInt("id", obj.optInt("Id", -1)).takeIf { it > 0 } ?: continue
+                    if (bestId == null || currentId > bestId) bestId = currentId
+                }
+                if (bestId != null) return bestId
+            } catch (_: Exception) {
+            }
+        }
+
+        return null
+    }
+
+    private suspend fun createInitialEskaeraAndResolveFaktura(
+        pendingQty: Map<Int, Int>,
+        pendingNotes: Map<Int, String?>
+    ): Int {
+        val produktuak = JSONArray()
+        val currentPlaterak = _uiState.value.platerak.associateBy { it.id }
+
+        for ((platerakId, qty) in pendingQty) {
+            if (qty <= 0) continue
+            val platera = currentPlaterak[platerakId]
+                ?: throw IllegalStateException("Ez da platera aurkitu: $platerakId")
+            produktuak.put(
+                JSONObject()
+                    .put("produktuaId", platerakId)
+                    .put("kantitatea", qty)
+                    .put("prezioUnitarioa", platera.price)
+            )
+        }
+
+        if (produktuak.length() == 0) {
+            throw IllegalStateException("Ez dago produkturik eskaera sortzeko")
+        }
+
+        val erabiltzaileId = sessionManager.userId.first()
+            ?: throw IllegalStateException("Saioan erabiltzaileId falta da. Egin login berriro.")
+
+        val payload = JSONObject()
+            .put("erabiltzaileId", erabiltzaileId)
+            .put("mahaiaId", currentTableId)
+            .put("komensalak", currentKomensalak.coerceAtLeast(1))
+            .put("erreserbaId", currentErreserbaId)
+            .put("data", currentData)
+            .put("txanda", currentTxanda)
+            .put("produktuak", produktuak)
+            .toString()
+
+        var lastError: String? = null
+        var eskaeraId: Int? = null
+        for (candidateUrl in apiBaseCandidates.flatMap { base -> listOf("$base/eskaerak", "$base/Eskaerak") }) {
+            try {
+                val url = URL(candidateUrl)
+                val conn = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    doOutput = true
+                    setRequestProperty("Accept", "application/json")
+                    setRequestProperty("Content-Type", "application/json")
+                    connectTimeout = 15000
+                    readTimeout = 15000
+                }
+                conn.outputStream.use { it.write(payload.toByteArray()) }
+                val code = conn.responseCode
+                val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+                val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                if (code !in 200..299) {
+                    lastError = "url=$candidateUrl code=$code body=${body.take(200)}"
+                    continue
+                }
+
+                val root = runCatching { JSONTokener(body).nextValue() }.getOrNull()
+                val array = when (root) {
+                    is JSONArray -> root
+                    is JSONObject -> root.optJSONArray("datuak") ?: root.optJSONArray("Datuak") ?: JSONArray()
+                    else -> JSONArray()
+                }
+                eskaeraId = array.optInt(0, -1).takeIf { it > 0 }
+                if (eskaeraId != null) break
+            } catch (e: Exception) {
+                lastError = "url=$candidateUrl error=${e.message ?: e.javaClass.simpleName}"
+            }
+        }
+
+        val finalEskaeraId = eskaeraId ?: throw IllegalStateException("Ezin izan da eskaera sortu ($lastError)")
+        val fakturaId = fetchFakturaIdByEskaeraId(finalEskaeraId)
+            ?: throw IllegalStateException("Ezin izan da faktura lortu eskaera sortu ondoren")
+
+        for ((platerakId, noteRaw) in pendingNotes) {
+            val note = noteRaw?.trim().orEmpty()
+            if (note.isBlank()) continue
+            val updated = fetchKomandak(fakturaId).filter { it.platerakId == platerakId }
+            val target = updated.maxByOrNull { it.id } ?: continue
+            putOharrak(target, note)
+        }
+
+        return fakturaId
+    }
+
     private fun fetchKomandak(fakturaId: Int): List<KomandaItem> {
+        if (fakturaId <= 0) return emptyList()
         var lastError: String? = null
         var sawNotFound = false
         var sawOtherError = false
@@ -414,7 +657,11 @@ class PlaterakViewModel : ViewModel() {
         val root = JSONTokener(finalBody).nextValue()
         val array = when (root) {
             is JSONArray -> root
-            is JSONObject -> root.optJSONArray("komandak") ?: JSONArray()
+            is JSONObject ->
+                root.optJSONArray("datuak")
+                    ?: root.optJSONArray("Datuak")
+                    ?: root.optJSONArray("komandak")
+                    ?: JSONArray()
             else -> JSONArray()
         }
 
