@@ -3,6 +3,7 @@ package com.example.osislogin.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.ViewModelProvider
+import com.example.osislogin.util.ZerbitzariakApiConfig
 import java.io.BufferedReader
 import java.io.BufferedWriter
 import java.io.InputStreamReader
@@ -29,8 +30,8 @@ data class ChatUiState(
 )
 
 class ChatViewModel(userName: String) : ViewModel() {
-    private val hostCandidates = listOf("192.168.2.101", "192.168.1.150")
-    private val port = 5555
+    private val hostCandidates = ZerbitzariakApiConfig.hostCandidates()
+    private val port = ZerbitzariakApiConfig.chatPort
 
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState

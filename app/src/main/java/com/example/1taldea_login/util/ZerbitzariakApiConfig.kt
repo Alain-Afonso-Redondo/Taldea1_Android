@@ -1,14 +1,26 @@
 package com.example.osislogin.util
 
 import com.example.osislogin.BuildConfig
+import java.net.URI
 
 object ZerbitzariakApiConfig {
     private const val emulatorBaseUrl = "http://10.0.2.2:5093/api"
+    const val chatPort: Int = 5555
 
     val primaryBaseUrl: String
         get() = normalizedCandidates().first()
 
     fun baseUrlCandidates(): List<String> = normalizedCandidates()
+
+    fun hostCandidates(): List<String> {
+        return normalizedCandidates()
+            .mapNotNull { candidate ->
+                runCatching { URI(candidate).host }
+                    .getOrNull()
+                    ?.takeIf { it.isNotBlank() }
+            }
+            .distinct()
+    }
 
     private fun normalizedCandidates(): List<String> {
         val configured = BuildConfig.ZERBITZARIAK_API_BASE.trim()

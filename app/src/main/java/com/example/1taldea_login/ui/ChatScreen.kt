@@ -69,6 +69,12 @@ fun ChatScreen(viewModel: ChatViewModel, onLogout: () -> Unit, onBack: () -> Uni
         return author to text
     }
 
+    val ownBubbleColor = remember { Color(0xFFD7E8D4) }
+    val otherBubbleColor = remember { Color(0xFFF3F0EA) }
+    val screenColor = remember { Color(0xFFE9E3D9) }
+    val ownAuthorColor = remember { Color(0xFF365C3B) }
+    val otherAuthorColor = remember { Color(0xFF5B5F73) }
+
     AppChrome(
         onLogout = onLogout,
         onLogoClick = onBack,
@@ -114,7 +120,7 @@ fun ChatScreen(viewModel: ChatViewModel, onLogout: () -> Unit, onBack: () -> Uni
                     Modifier
                         .fillMaxWidth()
                         .weight(1f)
-                        .background(Color(0xFFECE5DD))
+                        .background(screenColor)
             ) {
                 if (uiState.messages.isEmpty()) {
                     Text(
@@ -136,8 +142,14 @@ fun ChatScreen(viewModel: ChatViewModel, onLogout: () -> Unit, onBack: () -> Uni
                                     raw.contains("atera egin da", ignoreCase = true) ||
                                     text.contains("atera egin da", ignoreCase = true)
                             val isMine = author != null && author.equals(viewModel.userName, ignoreCase = false)
-                            val bubbleColor = if (isMine) Color(0xFFDCF8C6) else Color.White
+                            val bubbleColor = if (isMine) ownBubbleColor else otherBubbleColor
                             val arrangement = if (isMine) Arrangement.End else Arrangement.Start
+                            val bubbleShape =
+                                if (isMine) {
+                                    RoundedCornerShape(topStart = 18.dp, topEnd = 6.dp, bottomStart = 18.dp, bottomEnd = 18.dp)
+                                } else {
+                                    RoundedCornerShape(topStart = 6.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 18.dp)
+                                }
 
                             if (isSystemJoin) {
                                 Box(
@@ -161,7 +173,7 @@ fun ChatScreen(viewModel: ChatViewModel, onLogout: () -> Unit, onBack: () -> Uni
                                 ) {
                                     Card(
                                         modifier = Modifier.widthIn(max = bubbleMaxWidth),
-                                        shape = RoundedCornerShape(16.dp),
+                                        shape = bubbleShape,
                                     ) {
                                         Column(
                                             modifier =
@@ -174,7 +186,14 @@ fun ChatScreen(viewModel: ChatViewModel, onLogout: () -> Unit, onBack: () -> Uni
                                                 Text(
                                                     text = author,
                                                     style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.primary
+                                                    color = otherAuthorColor
+                                                )
+                                            }
+                                            if (!author.isNullOrBlank() && isMine) {
+                                                Text(
+                                                    text = author,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = ownAuthorColor
                                                 )
                                             }
                                             Text(

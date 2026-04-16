@@ -24,7 +24,8 @@ data class ApiUser(
     val username: String,
     val displayName: String = username,
     val lanpostuaId: Int? = null,
-    val langileaId: Int? = null
+    val langileaId: Int? = null,
+
 )
 
 data class LangileInfo(
@@ -170,6 +171,13 @@ class LoginViewModel(
                 val pasahitza = _uiState.value.pin
 
                 val result = withContext(Dispatchers.IO) { postLogin(erabiltzailea, pasahitza) }
+                if (result.rolaId != 2) {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        error = "Erabiltzaile honek ez dauka aplikazio honetan sartzeko baimenik"
+                    )
+                    return@launch
+                }
 
                 sessionManager.saveUserSession(
                     result.userName.ifBlank { erabiltzailea },
@@ -246,6 +254,13 @@ class LoginViewModel(
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
                 val result = withContext(Dispatchers.IO) { postLogin(erabiltzailea, pasahitza) }
+                if (result.rolaId != 2) {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        error = "Erabiltzaile honek ez dauka aplikazio honetan sartzeko baimenik"
+                    )
+                    return@launch
+                }
 
                 sessionManager.saveUserSession(
                     result.userName.ifBlank { erabiltzailea },
@@ -496,7 +511,8 @@ class LoginViewModel(
     private data class LoginApiResult(
         val userId: Int?,
         val userName: String,
-        val displayName: String
+        val displayName: String,
+        val rolaId: Int?
     )
 
     private fun postLogin(erabiltzailea: String, pasahitza: String): LoginApiResult {
@@ -554,6 +570,10 @@ class LoginViewModel(
                         "id",
                         userObject.optInt("Id", -1)
                     ).takeIf { it > 0 }
+                val rolaObject = userObject.optJSONObject("rola") ?: userObject.optJSONObject("Rola")
+                val rolaId =
+                    rolaObject?.optInt("id", rolaObject.optInt("Id", -1))?.takeIf { it > 0 }
+                        ?: userObject.optInt("rolaId", userObject.optInt("RolaId", -1)).takeIf { it > 0 }
 
                 val userName =
                     userObject.optString(
@@ -574,7 +594,8 @@ class LoginViewModel(
                 return LoginApiResult(
                     userId = userId,
                     userName = userName.ifBlank { email },
-                    displayName = displayName
+                    displayName = displayName,
+                    rolaId = rolaId
                 )
             } catch (e: Exception) {
                 lastException = e
