@@ -3,6 +3,7 @@ package com.example.osislogin.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.osislogin.util.SessionManager
+import com.example.osislogin.util.ZerbitzariakApiConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,6 +30,7 @@ data class TableSession(
     val mahaiId: Int,
     val erreserbaMahaiId: Int,
     val erreserbaId: Int?,
+    val eskaeraId: Int,
     val fakturaId: Int,
     val fakturaEgoera: Boolean,
     val fakturaTotala: Double,
@@ -54,7 +56,7 @@ data class CategoriesUiState(
 class CategoriesViewModel(
     private val sessionManager: SessionManager
 ) : ViewModel() {
-    private val apiBaseUrlLanPrimary = "http://172.16.237.29:5093/api"
+    private val apiBaseUrlLanPrimary = ZerbitzariakApiConfig.primaryBaseUrl
 
     private val _uiState = MutableStateFlow(CategoriesUiState())
     val uiState: StateFlow<CategoriesUiState> = _uiState
@@ -67,27 +69,35 @@ class CategoriesViewModel(
         viewModelScope.launch {
             try {
                 _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-                val session = withContext(Dispatchers.IO) {
-                    ensureSession(
-                        tableId = tableId,
-                        initialGuestCount = initialGuestCount,
-                        initialErreserbaId = initialErreserbaId,
-                        data = data,
-                        txanda = txanda,
-                        action = null
-                    )
-                }
+
                 val tableInfo = withContext(Dispatchers.IO) {
                     runCatching { fetchTableInfoFromMahaiak(tableId) }.getOrElse { TableInfo(label = null, guestCount = null) }
                 }
+                val activeEskaera = withContext(Dispatchers.IO) { fetchActiveEskaera(tableId, data, txanda) }
+                val faktura = withContext(Dispatchers.IO) {
+                    activeEskaera?.let { fetchFakturaByEskaeraId(it.eskaeraId) }
+                }
                 val guestCount =
-                    withContext(Dispatchers.IO) {
-                        sessionGuestCount(session, initialGuestCount)
-                            ?: initialGuestCount
-                            ?: tableInfo.guestCount
-                            ?: fetchGuestCountFromErreserba(session.erreserbaId)
-                    }
+                    activeEskaera?.komensalak
+                        ?: initialGuestCount.takeIf { it > 0 }
+                        ?: tableInfo.guestCount
+                        ?: fetchGuestCountFromErreserba(initialErreserbaId)
+                        ?: 1
                 val categories = withContext(Dispatchers.IO) { fetchCategories() }
+
+                val session = TableSession(
+                    mahaiId = tableId,
+                    erreserbaMahaiId = 0,
+                    erreserbaId = activeEskaera?.erreserbaId ?: initialErreserbaId,
+                    eskaeraId = activeEskaera?.eskaeraId ?: 0,
+                    fakturaId = faktura?.optInt("Id", faktura.optInt("id", 0)) ?: 0,
+                    fakturaEgoera = false,
+                    fakturaTotala = faktura?.optDouble("Totala", faktura.optDouble("totala", 0.0)) ?: 0.0,
+                    requiresDecision = false,
+                    txanda = txanda,
+                    data = data
+                )
+
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     session = session,
@@ -105,14 +115,21 @@ class CategoriesViewModel(
     }
 
     fun reopenFactura(tableId: Int) {
-        resolveClosedFactura(tableId, action = "reopen")
+        val session = _uiState.value.session ?: return
+        load(
+            tableId = tableId,
+            initialGuestCount = _uiState.value.guestCount ?: 1,
+            initialErreserbaId = session.erreserbaId,
+            data = session.data,
+            txanda = session.txanda
+        )
     }
 
-    fun closeFactura(fakturaId: Int) {
+    fun closeFactura(eskaeraId: Int) {
         viewModelScope.launch {
             try {
                 _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-                withContext(Dispatchers.IO) { patchOrdaindu(fakturaId) }
+                withContext(Dispatchers.IO) { postOrdainduEskaera(eskaeraId) }
                 _uiState.value = _uiState.value.copy(isLoading = false, error = null)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isLoading = false, error = e.message ?: e.javaClass.simpleName)
@@ -120,26 +137,19 @@ class CategoriesViewModel(
         }
     }
 
-    fun loadClosePreview(fakturaId: Int) {
+    fun loadClosePreview(eskaeraId: Int) {
         viewModelScope.launch {
             try {
                 _uiState.value =
                     _uiState.value.copy(
                         isClosePreviewLoading = true,
-                        closePreviewFakturaId = fakturaId,
+                        closePreviewFakturaId = _uiState.value.session?.fakturaId,
                         closePreviewLines = emptyList(),
                         error = null
                     )
                 val lines =
                     withContext(Dispatchers.IO) {
-                        val items = fetchKomandakItemsByFaktura(fakturaId)
-                        val totals = items.groupBy { it.platerakId }.mapValues { (_, list) -> list.sumOf { it.kopurua } }
-                        val result = ArrayList<ConsumptionLine>(totals.size)
-                        for ((platerakId, qty) in totals) {
-                            val name = fetchPlateraName(platerakId)
-                            result.add(ConsumptionLine(name = name, qty = qty))
-                        }
-                        result.sortedWith(compareBy({ it.name.lowercase() }, { it.qty }))
+                        fetchConsumptionLinesByEskaera(eskaeraId)
                     }
                 _uiState.value = _uiState.value.copy(isClosePreviewLoading = false, closePreviewLines = lines, error = null)
             } catch (e: Exception) {
@@ -417,6 +427,7 @@ class CategoriesViewModel(
                     mahaiId = obj.optInt("mahaiId", obj.optInt("MahaiId")),
                     erreserbaMahaiId = obj.optInt("erreserbaMahaiId", obj.optInt("ErreserbaMahaiId")),
                     erreserbaId = obj.optInt("erreserbaId", obj.optInt("ErreserbaId")),
+                    eskaeraId = 0,
                     fakturaId = obj.optInt("fakturaId", obj.optInt("FakturaId")),
                     fakturaEgoera = obj.optBoolean("fakturaEgoera", obj.optBoolean("FakturaEgoera", false)),
                     fakturaTotala = obj.optDouble("fakturaTotala", obj.optDouble("FakturaTotala", 0.0)),
@@ -440,6 +451,7 @@ class CategoriesViewModel(
             mahaiId = tableId,
             erreserbaMahaiId = 0,
             erreserbaId = effectiveErreserbaId,
+            eskaeraId = eskaera?.eskaeraId ?: 0,
             fakturaId = fakturaId,
             fakturaEgoera = false,
             fakturaTotala = fakturaTotala,
@@ -1105,6 +1117,84 @@ class CategoriesViewModel(
         throw IllegalStateException("Ezin izan da faktura itxi ($lastError)")
     }
 
+    private fun postOrdainduEskaera(eskaeraId: Int) {
+        var lastError: String? = null
+        val candidates = listOf(
+            "$apiBaseUrlLanPrimary/eskaerak/$eskaeraId/ordainduEskaera",
+            "$apiBaseUrlLanPrimary/Eskaerak/$eskaeraId/ordainduEskaera"
+        )
+
+        for (candidateUrl in candidates) {
+            val url = URL(candidateUrl)
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                setRequestProperty("Accept", "application/json")
+                connectTimeout = 15000
+                readTimeout = 15000
+            }
+            val code = conn.responseCode
+            if (code in 200..299) return
+
+            val body = conn.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            lastError = "url=$candidateUrl code=$code body=${body.take(200)}"
+        }
+
+        throw IllegalStateException("Ezin izan da eskaera ordainketara bidali ($lastError)")
+    }
+
+    private fun fetchConsumptionLinesByEskaera(eskaeraId: Int): List<ConsumptionLine> {
+        val candidates = listOf(
+            "$apiBaseUrlLanPrimary/eskaerak/$eskaeraId/produktuak",
+            "$apiBaseUrlLanPrimary/Eskaerak/$eskaeraId/produktuak"
+        )
+
+        var lastError: String? = null
+        var okBody: String? = null
+        for (candidateUrl in candidates) {
+            val url = URL(candidateUrl)
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                setRequestProperty("Accept", "application/json")
+                connectTimeout = 15000
+                readTimeout = 15000
+            }
+            val code = conn.responseCode
+            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+            val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            if (code !in 200..299) {
+                lastError = "url=$candidateUrl code=$code body=${body.take(200)}"
+                continue
+            }
+            okBody = body
+            break
+        }
+
+        val finalBody = okBody ?: throw IllegalStateException("Ezin izan dira kontsumizioak kargatu ($lastError)")
+        val root = JSONTokener(finalBody).nextValue()
+        val array = when (root) {
+            is JSONArray -> root
+            is JSONObject -> root.optJSONArray("datuak") ?: root.optJSONArray("Datuak") ?: JSONArray()
+            else -> JSONArray()
+        }
+
+        val totals = linkedMapOf<String, Int>()
+        for (i in 0 until array.length()) {
+            val obj = array.optJSONObject(i) ?: continue
+            val name =
+                obj.optString(
+                    "ProduktuaIzena",
+                    obj.optString("produktuaIzena", "")
+                ).trim()
+            val qty = obj.optInt("Kantitatea", obj.optInt("kantitatea", 0))
+            if (name.isBlank() || qty <= 0) continue
+            totals[name] = (totals[name] ?: 0) + qty
+        }
+
+        return totals.entries
+            .map { ConsumptionLine(name = it.key, qty = it.value) }
+            .sortedBy { it.name.lowercase() }
+    }
+
     private fun fetchCategories(): List<Category> {
         var lastError: String? = null
         val candidates = listOf(
@@ -1137,7 +1227,12 @@ class CategoriesViewModel(
         val root = JSONTokener(finalBody).nextValue()
         val array = when (root) {
             is JSONArray -> root
-            is JSONObject -> root.optJSONArray("kategoriak") ?: JSONArray()
+            is JSONObject ->
+                root.optJSONArray("datuak")
+                    ?: root.optJSONArray("Datuak")
+                    ?: root.optJSONArray("kategoriak")
+                    ?: root.optJSONArray("Kategoriak")
+                    ?: JSONArray()
             else -> JSONArray()
         }
 

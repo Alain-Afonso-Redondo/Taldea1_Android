@@ -252,7 +252,7 @@ fun PinDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss, enabled = !isLoading) {
-                Text("Bekitu")
+                Text("Itzuli")
             }
         }
     )

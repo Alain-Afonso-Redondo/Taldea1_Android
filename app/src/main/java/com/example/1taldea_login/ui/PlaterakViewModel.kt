@@ -1,6 +1,7 @@
 package com.example.osislogin.ui
 
 import com.example.osislogin.util.SessionManager
+import com.example.osislogin.util.ZerbitzariakApiConfig
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
@@ -51,8 +52,8 @@ data class PlaterakUiState(
 class PlaterakViewModel(
     private val sessionManager: SessionManager
 ) : ViewModel() {
-    private val apiBaseUrlLanPrimary = "http://172.16.237.29:5093/api"
-    private val apiBaseCandidates = listOf(apiBaseUrlLanPrimary)
+    private val apiBaseUrlLanPrimary = ZerbitzariakApiConfig.primaryBaseUrl
+    private val apiBaseCandidates = ZerbitzariakApiConfig.baseUrlCandidates()
 
     private val _uiState = MutableStateFlow(PlaterakUiState())
     val uiState: StateFlow<PlaterakUiState> = _uiState

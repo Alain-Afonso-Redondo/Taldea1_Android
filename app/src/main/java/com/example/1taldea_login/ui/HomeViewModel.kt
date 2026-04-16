@@ -1,6 +1,7 @@
 package com.example.osislogin.ui
 
 import com.example.osislogin.util.SessionManager
+import com.example.osislogin.util.ZerbitzariakApiConfig
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import java.net.ConnectException
@@ -45,7 +46,7 @@ data class HomeUiState(
 
 class HomeViewModel(private val sessionManager: SessionManager) : ViewModel() {
 
-    private val apiBaseUrlLanPrimary = "http://172.16.237.29:5093/api"
+    private val apiBaseUrlLanPrimary = ZerbitzariakApiConfig.primaryBaseUrl
 
     val userEmail = sessionManager.userEmail.stateIn(
         viewModelScope,
@@ -341,8 +342,7 @@ class HomeViewModel(private val sessionManager: SessionManager) : ViewModel() {
     }
 
     private fun apiBaseUrlCandidates(): List<String> {
-        val base = apiBaseUrlLanPrimary.trimEnd('/')
-        return listOf(base)
+        return ZerbitzariakApiConfig.baseUrlCandidates().map { it.trimEnd('/') }.distinct()
     }
 }
 

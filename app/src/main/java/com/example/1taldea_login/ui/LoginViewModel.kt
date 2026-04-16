@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.osislogin.data.AppDatabase
 import com.example.osislogin.util.HashingUtil
 import com.example.osislogin.util.SessionManager
+import com.example.osislogin.util.ZerbitzariakApiConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -49,7 +50,9 @@ class LoginViewModel(
     private val sessionManager: SessionManager
 ) : ViewModel() {   
 
-    private val apiBaseUrlLanPrimary = "http://172.16.237.29:5093/api"
+    private val apiBaseUrlLanPrimary = ZerbitzariakApiConfig.primaryBaseUrl
+
+
 
     private val _uiState = MutableStateFlow(LoginUiState())
     val uiState: StateFlow<LoginUiState> = _uiState
@@ -582,13 +585,14 @@ class LoginViewModel(
     }
 
     private fun apiBaseUrlCandidates(): List<String> {
-        val base = apiBaseUrlLanPrimary.trimEnd('/')
-        val noApi =
-            if (base.endsWith("/api")) {
-                base.removeSuffix("/api").trimEnd('/')
-            } else {
-                base
-            }
-        return listOf(base, noApi).distinct()
+        return ZerbitzariakApiConfig.baseUrlCandidates().flatMap { base ->
+            val noApi =
+                if (base.endsWith("/api")) {
+                    base.removeSuffix("/api").trimEnd('/')
+                } else {
+                    base
+                }
+            listOf(base, noApi)
+        }.distinct()
     }
 }

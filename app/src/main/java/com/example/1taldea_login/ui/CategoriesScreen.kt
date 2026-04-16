@@ -3,6 +3,9 @@ package com.example.osislogin.ui
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
@@ -28,6 +31,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.osislogin.R
 
@@ -93,7 +97,7 @@ fun CategoriesScreen(
             }
 
             if (showClosePreviewDialog) {
-                val fakturaId = session?.fakturaId ?: 0
+                val eskaeraId = session?.eskaeraId ?: 0
                 AlertDialog(
                     onDismissRequest = { showClosePreviewDialog = false },
                     title = { Text(text = "Faktura itxi") },
@@ -125,8 +129,8 @@ fun CategoriesScreen(
                     confirmButton = {
                         TextButton(
                             onClick = {
-                                if (!uiState.isClosePreviewLoading && fakturaId > 0) {
-                                    viewModel.closeFactura(fakturaId)
+                                if (!uiState.isClosePreviewLoading && eskaeraId > 0) {
+                                    viewModel.closeFactura(eskaeraId)
                                     goBackAfterClose = true
                                     showClosePreviewDialog = false
                                 }
@@ -153,11 +157,6 @@ fun CategoriesScreen(
                     modifier = Modifier.align(Alignment.Center)
                 )
             } else {
-                val c0 = categories.getOrNull(0)
-                val c1 = categories.getOrNull(1)
-                val c2 = categories.getOrNull(2)
-                val c3 = categories.getOrNull(3)
-
                 Column(
                     modifier = Modifier.fillMaxSize().padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -201,12 +200,7 @@ fun CategoriesScreen(
                     }
 
                     @Composable
-                    fun CategoryTile(category: Category?, iconResId: Int, modifier: Modifier) {
-                        if (category == null) {
-                            Box(modifier = modifier)
-                            return
-                        }
-
+                    fun CategoryTile(category: Category, modifier: Modifier) {
                         Surface(
                             color = Color.White,
                             shape = shape,
@@ -227,50 +221,77 @@ fun CategoriesScreen(
                                         )
                                     }
                         ) {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(
+                                modifier = Modifier.fillMaxSize().padding(14.dp),
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
                                 Image(
-                                    painter = painterResource(iconResId),
+                                    painter = painterResource(categoryIconRes(category)),
                                     contentDescription = null,
                                     colorFilter = ColorFilter.tint(orange),
-                                    modifier = Modifier.size(92.dp)
+                                    modifier = Modifier.size(72.dp)
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Text(
+                                    text = formatCategoryName(category.name),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    textAlign = TextAlign.Center
                                 )
                             }
                         }
                     }
 
-                    CategoryTile(c0, R.drawable.primero, Modifier.fillMaxWidth().weight(1f))
-                    CategoryTile(c1, R.drawable.segundo, Modifier.fillMaxWidth().weight(1f))
-                    CategoryTile(c2, R.drawable.postre, Modifier.fillMaxWidth().weight(1f))
-
-                    Row(
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
                         modifier = Modifier.fillMaxWidth().weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        CategoryTile(c3, R.drawable.bebidas, Modifier.weight(1f).fillMaxHeight())
+                        items(categories, key = { it.id }) { category ->
+                            CategoryTile(
+                                category = category,
+                                modifier = Modifier.fillMaxWidth().height(180.dp)
+                            )
+                        }
 
-                        Surface(
-                            color = orange,
-                            shape = shape,
-                            modifier =
-                                Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()
-                                    .shadow(elevation = elevation, shape = shape)
-                                    .clickable {
-                                        val s = session ?: return@clickable
-                                        if (s.fakturaId <= 0) return@clickable
-                                        if (s.requiresDecision) return@clickable
-                                        showClosePreviewDialog = true
-                                        viewModel.loadClosePreview(s.fakturaId)
-                                    }
-                        ) {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Image(
-                                    painter = painterResource(R.drawable.recibo),
-                                    contentDescription = null,
-                                    colorFilter = ColorFilter.tint(Color.White),
-                                    modifier = Modifier.size(92.dp)
-                                )
+                        item {
+                            Surface(
+                                color = orange,
+                                shape = shape,
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .height(180.dp)
+                                        .shadow(elevation = elevation, shape = shape)
+                                        .clickable {
+                                            val s = session ?: return@clickable
+                                            if (s.eskaeraId <= 0) return@clickable
+                                            if (s.requiresDecision) return@clickable
+                                            showClosePreviewDialog = true
+                                            viewModel.loadClosePreview(s.eskaeraId)
+                                        }
+                            ) {
+                                Column(
+                                    modifier = Modifier.fillMaxSize().padding(14.dp),
+                                    verticalArrangement = Arrangement.Center,
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Image(
+                                        painter = painterResource(R.drawable.recibo),
+                                        contentDescription = null,
+                                        colorFilter = ColorFilter.tint(Color.White),
+                                        modifier = Modifier.size(72.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Text(
+                                        text = "Faktura itxi",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = Color.White,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
                             }
                         }
                     }
@@ -288,4 +309,27 @@ fun CategoriesScreen(
             }
         }
     }
+}
+
+private fun categoryIconRes(category: Category): Int {
+    val normalized = category.name.lowercase()
+    return when {
+        "lehen" in normalized -> R.drawable.primero
+        "bigarren" in normalized -> R.drawable.segundo
+        "postre" in normalized -> R.drawable.postre
+        "edari" in normalized || "kafe" in normalized -> R.drawable.bebidas
+        "pintxo" in normalized -> R.drawable.primero
+        "razio" in normalized -> R.drawable.segundo
+        else -> R.drawable.primero
+    }
+}
+
+private fun formatCategoryName(raw: String): String {
+    return raw
+        .replace('_', ' ')
+        .split(' ')
+        .filter { it.isNotBlank() }
+        .joinToString(" ") { token ->
+            token.replaceFirstChar { ch -> ch.uppercase() }
+        }
 }
