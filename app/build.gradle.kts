@@ -1,5 +1,3 @@
-import java.util.Properties
-
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -7,15 +5,8 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
-val localProperties = Properties().apply {
-    val file = rootProject.file("local.properties")
-    if (file.exists()) {
-        file.inputStream().use { load(it) }
-    }
-}
-
 val zerbitzariakApiBase =
-    localProperties.getProperty("zerbitzariak.api.base", "http://10.0.2.2:5093/api")
+    providers.gradleProperty("zerbitzariak.api.base").orElse("http://10.0.2.2:5093/api").get()
 
 android {
     namespace = "com.example.osislogin"
