@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">OSIS Service</string>
+    <string name="app_name">AJA Zerbitzariak</string>
     <string name="login_title">Saio Hasiera</string>
     <string name="email_hint">Erabiltzailea</string>
     <string name="password_hint">Pasahitza</string>
