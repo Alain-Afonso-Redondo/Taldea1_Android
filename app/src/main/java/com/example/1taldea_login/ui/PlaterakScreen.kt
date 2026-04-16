@@ -289,12 +289,18 @@ fun PlaterakScreen(
                     onDismissRequest = { noteDialogFor = null },
                     title = { Text(text = "Oharrak - ${platera.name}") },
                     text = {
-                        OutlinedTextField(
-                            value = noteText,
-                            onValueChange = { noteText = it },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = false
-                        )
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                text = "API berrian oharrak oraindik ez daude prest, baina hemen utzita geratuko zaizu abisua.",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            OutlinedTextField(
+                                value = noteText,
+                                onValueChange = { noteText = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = false
+                            )
+                        }
                     },
                     confirmButton = {
                         TextButton(
