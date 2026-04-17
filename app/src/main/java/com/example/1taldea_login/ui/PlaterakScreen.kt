@@ -56,6 +56,7 @@ fun PlaterakScreen(
     viewModel: PlaterakViewModel,
     onLogout: () -> Unit,
     onChat: () -> Unit,
+    canAccessChat: Boolean,
     chatUnreadCount: Int,
     onBack: () -> Unit
 ) {
@@ -82,6 +83,7 @@ fun PlaterakScreen(
     AppChrome(
         onLogout = onLogout,
         onLogoClick = onBack,
+        showRightAction = canAccessChat,
         rightIconResId = com.example.osislogin.R.drawable.chat,
         rightIconContentDescription = "Chat",
         onRightAction = onChat,

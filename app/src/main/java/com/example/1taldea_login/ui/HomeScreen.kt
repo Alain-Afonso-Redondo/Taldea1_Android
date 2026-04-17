@@ -44,6 +44,7 @@ fun HomeScreen(
     viewModel: HomeViewModel,
     onLogout: () -> Unit,
     onChat: () -> Unit,
+    canAccessChat: Boolean,
     chatUnreadCount: Int,
     onTableClick: (tableId: Int, komensalak: Int, erreserbaId: Int?, data: String, txanda: String) -> Unit
 ) {
@@ -275,7 +276,7 @@ fun HomeScreen(
                                 }
                             }
 
-                            if (chatUnreadCount > 0) {
+                            if (canAccessChat && chatUnreadCount > 0) {
                                 val label = if (chatUnreadCount > 99) "99+" else chatUnreadCount.toString()
                                 BadgedBox(badge = { Badge { Text(text = label) } }) {
                                     Box(
@@ -290,7 +291,7 @@ fun HomeScreen(
                                         )
                                     }
                                 }
-                            } else {
+                            } else if (canAccessChat) {
                                 Box(
                                     modifier = Modifier.size(72.dp).clickable(onClick = onChat),
                                     contentAlignment = Alignment.Center
@@ -393,7 +394,7 @@ fun HomeScreen(
                     }
                 }
                 Spacer(modifier = Modifier.width(16.dp))
-                if (chatUnreadCount > 0) {
+                if (canAccessChat && chatUnreadCount > 0) {
                     val label = if (chatUnreadCount > 99) "99+" else chatUnreadCount.toString()
                     BadgedBox(badge = { Badge { Text(text = label) } }) {
                         Box(
@@ -408,7 +409,7 @@ fun HomeScreen(
                             )
                         }
                     }
-                } else {
+                } else if (canAccessChat) {
                     Box(
                         modifier = Modifier.size(72.dp).clickable(onClick = onChat),
                         contentAlignment = Alignment.Center

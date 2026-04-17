@@ -55,12 +55,21 @@ fun AppNavigation(database: AppDatabase, sessionManager: SessionManager, startDe
     val chatViewModel: ChatViewModel = viewModel(factory = ChatViewModel.factory(initialUserName = "Anonimoa"))
     val chatUiState by chatViewModel.uiState.collectAsState()
     val userName by sessionManager.userName.collectAsState(initial = null)
+    val canAccessChat by sessionManager.canAccessChat.collectAsState(initial = false)
 
-    LaunchedEffect(userName) {
+    LaunchedEffect(userName, canAccessChat) {
         val name = userName?.trim().orEmpty()
-        if (name.isNotBlank()) {
+        if (name.isNotBlank() && canAccessChat) {
             chatViewModel.updateUserName(name)
             chatViewModel.connect()
+        } else if (!canAccessChat) {
+            chatViewModel.reset()
+        }
+    }
+
+    val navigateToChatIfAllowed: () -> Unit = {
+        if (canAccessChat) {
+            navController.navigate(Route.Chat.route)
         }
     }
 
@@ -88,8 +97,9 @@ fun AppNavigation(database: AppDatabase, sessionManager: SessionManager, startDe
             HomeScreen(
                     viewModel = viewModel,
                     onLogout = logoutAndGoToLogin,
-                    onChat = { navController.navigate(Route.Chat.route) },
-                    chatUnreadCount = chatUiState.unreadCount,
+                    onChat = navigateToChatIfAllowed,
+                    canAccessChat = canAccessChat,
+                    chatUnreadCount = if (canAccessChat) chatUiState.unreadCount else 0,
                     onTableClick = { tableId, komensalak, erreserbaId, data, txanda ->
                         navController.navigate(Route.Categories.create(tableId, komensalak, erreserbaId, data, txanda))
                     }
@@ -120,8 +130,9 @@ fun AppNavigation(database: AppDatabase, sessionManager: SessionManager, startDe
                     txanda = txanda,
                     viewModel = viewModel,
                     onLogout = logoutAndGoToLogin,
-                    onChat = { navController.navigate(Route.Chat.route) },
-                    chatUnreadCount = chatUiState.unreadCount,
+                    onChat = navigateToChatIfAllowed,
+                    canAccessChat = canAccessChat,
+                    chatUnreadCount = if (canAccessChat) chatUiState.unreadCount else 0,
                     onBack = { navController.popBackStack() },
                     onCategorySelected = { tId, fakturaId, kategoriId, selectedKomensalak, selectedErreserbaId, selectedData, selectedTxanda ->
                         navController.navigate(
@@ -170,8 +181,9 @@ fun AppNavigation(database: AppDatabase, sessionManager: SessionManager, startDe
                     txanda = txanda,
                     viewModel = viewModel,
                     onLogout = logoutAndGoToLogin,
-                    onChat = { navController.navigate(Route.Chat.route) },
-                    chatUnreadCount = chatUiState.unreadCount,
+                    onChat = navigateToChatIfAllowed,
+                    canAccessChat = canAccessChat,
+                    chatUnreadCount = if (canAccessChat) chatUiState.unreadCount else 0,
                     onBack = {
                         if (!navController.popBackStack()) {
                             navController.navigate(Route.Categories.create(tableId, komensalak, erreserbaId, data, txanda)) {
@@ -183,11 +195,17 @@ fun AppNavigation(database: AppDatabase, sessionManager: SessionManager, startDe
         }
 
         composable(Route.Chat.route) {
-            ChatScreen(
-                    viewModel = chatViewModel,
-                    onLogout = logoutAndGoToLogin,
-                    onBack = { navController.popBackStack() }
-            )
+            if (canAccessChat) {
+                ChatScreen(
+                        viewModel = chatViewModel,
+                        onLogout = logoutAndGoToLogin,
+                        onBack = { navController.popBackStack() }
+                )
+            } else {
+                LaunchedEffect(Unit) {
+                    navController.popBackStack()
+                }
+            }
         }
     }
 }

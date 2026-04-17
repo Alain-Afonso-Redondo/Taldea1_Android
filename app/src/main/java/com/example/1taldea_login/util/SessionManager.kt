@@ -17,6 +17,7 @@ class SessionManager(private val context: Context) {
         private val USER_EMAIL_KEY = stringPreferencesKey("user_email")
         private val USER_NAME_KEY = stringPreferencesKey("user_name")
         private val USER_ID_KEY = intPreferencesKey("user_id")
+        private val USER_CHAT_ENABLED_KEY = intPreferencesKey("user_chat_enabled")
     }
 
     val userEmail: Flow<String?> = context.dataStore.data.map { preferences ->
@@ -31,10 +32,20 @@ class SessionManager(private val context: Context) {
         preferences[USER_ID_KEY]
     }
 
-    suspend fun saveUserSession(email: String, name: String, userId: Int? = null) {
+    val canAccessChat: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[USER_CHAT_ENABLED_KEY] == 1
+    }
+
+    suspend fun saveUserSession(
+        email: String,
+        name: String,
+        userId: Int? = null,
+        canAccessChat: Boolean = false
+    ) {
         context.dataStore.edit { preferences ->
             preferences[USER_EMAIL_KEY] = email
             preferences[USER_NAME_KEY] = name
+            preferences[USER_CHAT_ENABLED_KEY] = if (canAccessChat) 1 else 0
             if (userId != null && userId > 0) {
                 preferences[USER_ID_KEY] = userId
             } else {

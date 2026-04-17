@@ -47,6 +47,7 @@ class ChatViewModel(userName: String) : ViewModel() {
     private var reconnectJob: Job? = null
     private var reconnectAttempts: Int = 0
     private val pending = ArrayDeque<String>()
+    private var lastSentFullMessage: String = ""
     @Volatile private var isChatOpen: Boolean = false
 
     override fun onCleared() {
@@ -80,6 +81,7 @@ class ChatViewModel(userName: String) : ViewModel() {
     fun reset() {
         disconnect()
         pending.clear()
+        lastSentFullMessage = ""
         _uiState.update { it.copy(messages = emptyList(), unreadCount = 0, error = null, status = "Deskonektatuta") }
     }
 
@@ -157,6 +159,9 @@ class ChatViewModel(userName: String) : ViewModel() {
 
                     while (isActive) {
                         val line = r.readLine() ?: break
+                        if (shouldIgnoreIncomingLine(line)) {
+                            continue
+                        }
                         withContext(Dispatchers.Main) {
                             _uiState.update { state ->
                                 val isSystem =
@@ -203,14 +208,51 @@ class ChatViewModel(userName: String) : ViewModel() {
         _uiState.update { it.copy(isConnecting = false, isConnected = false, status = "Deskonektatuta") }
     }
 
+    private fun isOwnSystemPresenceMessage(line: String): Boolean {
+        val normalizedLine = line.trim()
+        val normalizedUser = currentUserName.trim()
+        if (normalizedLine.isEmpty() || normalizedUser.isEmpty()) return false
+
+        val isPresenceMessage =
+            normalizedLine.contains("sartu da", ignoreCase = true) ||
+                normalizedLine.contains("atera egin da", ignoreCase = true)
+
+        if (!isPresenceMessage) return false
+
+        return normalizedLine.contains(normalizedUser, ignoreCase = true)
+    }
+
+    private fun shouldIgnoreIncomingLine(line: String): Boolean {
+        val normalizedLine = line.trim()
+        if (normalizedLine.isEmpty()) return true
+
+        if (normalizedLine.equals(currentUserName.trim(), ignoreCase = true)) {
+            return true
+        }
+
+        if (isOwnSystemPresenceMessage(normalizedLine)) {
+            return true
+        }
+
+        val normalizedLastSent = lastSentFullMessage.trim()
+        if (normalizedLastSent.isNotEmpty() && normalizedLine == normalizedLastSent) {
+            lastSentFullMessage = ""
+            return true
+        }
+
+        return false
+    }
+
 
 
     fun send(text: String) {
         val msg = text.trim()
         if (msg.isEmpty()) return
+        val fullMessage = "${currentUserName.trim()}: $msg"
 
         if (!_uiState.value.isConnected) {
-            pending.addLast(msg)
+            pending.addLast(fullMessage)
+            lastSentFullMessage = fullMessage
             connect()
             _uiState.update { it.copy(status = "Konektatzen...") }
             return
@@ -219,9 +261,13 @@ class ChatViewModel(userName: String) : ViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val w = writer ?: throw IllegalStateException("Writer no disponible")
-                w.write(msg)
+                w.write(fullMessage)
                 w.newLine()
                 w.flush()
+                lastSentFullMessage = fullMessage
+                withContext(Dispatchers.Main) {
+                    _uiState.update { state -> state.copy(messages = state.messages + fullMessage) }
+                }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     _uiState.update {

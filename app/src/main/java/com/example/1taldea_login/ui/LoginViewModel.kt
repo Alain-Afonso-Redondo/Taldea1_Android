@@ -182,7 +182,8 @@ class LoginViewModel(
                 sessionManager.saveUserSession(
                     result.userName.ifBlank { erabiltzailea },
                     result.displayName.ifBlank { user.displayName },
-                    user.id
+                    user.id,
+                    canAccessChat = result.txatEnabled
                 )
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -265,7 +266,8 @@ class LoginViewModel(
                 sessionManager.saveUserSession(
                     result.userName.ifBlank { erabiltzailea },
                     result.displayName.ifBlank { result.userName.ifBlank { erabiltzailea } },
-                    result.userId
+                    result.userId,
+                    canAccessChat = result.txatEnabled
                 )
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -512,7 +514,8 @@ class LoginViewModel(
         val userId: Int?,
         val userName: String,
         val displayName: String,
-        val rolaId: Int?
+        val rolaId: Int?,
+        val txatEnabled: Boolean
     )
 
     private fun postLogin(erabiltzailea: String, pasahitza: String): LoginApiResult {
@@ -540,7 +543,6 @@ class LoginViewModel(
                 val requestBody = JSONObject()
                     .put("erabiltzailea", erabiltzailea)
                     .put("pasahitza", pasahitza)
-                    .put("txat", false)
                     .toString()
 
                 conn.outputStream.use { os ->
@@ -574,6 +576,7 @@ class LoginViewModel(
                 val rolaId =
                     rolaObject?.optInt("id", rolaObject.optInt("Id", -1))?.takeIf { it > 0 }
                         ?: userObject.optInt("rolaId", userObject.optInt("RolaId", -1)).takeIf { it > 0 }
+                val txatEnabled = parseTxatEnabled(userObject)
 
                 val userName =
                     userObject.optString(
@@ -595,7 +598,8 @@ class LoginViewModel(
                     userId = userId,
                     userName = userName.ifBlank { email },
                     displayName = displayName,
-                    rolaId = rolaId
+                    rolaId = rolaId,
+                    txatEnabled = txatEnabled
                 )
             } catch (e: Exception) {
                 lastException = e
@@ -615,5 +619,35 @@ class LoginViewModel(
                 }
             listOf(base, noApi)
         }.distinct()
+    }
+
+    private fun parseTxatEnabled(userObject: JSONObject): Boolean {
+        val directValue = userObject.opt("txat") ?: userObject.opt("Txat")
+        when (directValue) {
+            is Boolean -> return directValue
+            is Number -> return directValue.toInt() == 1
+            is String -> {
+                val normalized = directValue.trim().lowercase()
+                if (normalized in setOf("true", "1", "bai", "yes")) return true
+                if (normalized in setOf("false", "0", "ez", "no", "")) return false
+            }
+        }
+
+        val txatObject = userObject.optJSONObject("txat") ?: userObject.optJSONObject("Txat")
+        if (txatObject != null) {
+            val nestedValue = txatObject.opt("enabled")
+                ?: txatObject.opt("Enabled")
+                ?: txatObject.opt("baimenduta")
+                ?: txatObject.opt("Baimenduta")
+                ?: txatObject.opt("balioa")
+                ?: txatObject.opt("Balioa")
+            when (nestedValue) {
+                is Boolean -> return nestedValue
+                is Number -> return nestedValue.toInt() == 1
+                is String -> return nestedValue.trim().equals("true", ignoreCase = true) || nestedValue.trim() == "1"
+            }
+        }
+
+        return false
     }
 }

@@ -45,6 +45,7 @@ fun CategoriesScreen(
     viewModel: CategoriesViewModel,
     onLogout: () -> Unit,
     onChat: () -> Unit,
+    canAccessChat: Boolean,
     chatUnreadCount: Int,
     onBack: () -> Unit,
     onCategorySelected: (
@@ -70,6 +71,7 @@ fun CategoriesScreen(
         onLogoClick = onBack,
         navigationIcon = Icons.Filled.Apps,
         navigationIconContentDescription = "Mahaiak",
+        showRightAction = canAccessChat,
         rightIconResId = R.drawable.chat,
         rightIconContentDescription = "Chat",
         onRightAction = onChat,

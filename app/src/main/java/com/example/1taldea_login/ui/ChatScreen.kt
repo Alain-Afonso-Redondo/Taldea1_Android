@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.LazyColumn
@@ -69,11 +70,17 @@ fun ChatScreen(viewModel: ChatViewModel, onLogout: () -> Unit, onBack: () -> Uni
         return author to text
     }
 
-    val ownBubbleColor = remember { Color(0xFFD7E8D4) }
+    fun normalizeUserName(value: String?): String {
+        return value?.trim()?.lowercase().orEmpty()
+    }
+
+    val ownBubbleColor = remember { Color(0xFF1F6F5F) }
     val otherBubbleColor = remember { Color(0xFFF3F0EA) }
     val screenColor = remember { Color(0xFFE9E3D9) }
-    val ownAuthorColor = remember { Color(0xFF365C3B) }
+    val ownAuthorColor = remember { Color(0xFFBEE9DF) }
     val otherAuthorColor = remember { Color(0xFF5B5F73) }
+    val ownMessageColor = remember { Color.White }
+    val otherMessageColor = remember { Color(0xFF111111) }
 
     AppChrome(
         onLogout = onLogout,
@@ -141,7 +148,8 @@ fun ChatScreen(viewModel: ChatViewModel, onLogout: () -> Unit, onBack: () -> Uni
                                     text.contains("sartu da", ignoreCase = true) ||
                                     raw.contains("atera egin da", ignoreCase = true) ||
                                     text.contains("atera egin da", ignoreCase = true)
-                            val isMine = author != null && author.equals(viewModel.userName, ignoreCase = false)
+                            val isMine =
+                                normalizeUserName(author) == normalizeUserName(viewModel.userName)
                             val bubbleColor = if (isMine) ownBubbleColor else otherBubbleColor
                             val arrangement = if (isMine) Arrangement.End else Arrangement.Start
                             val bubbleShape =
@@ -186,20 +194,26 @@ fun ChatScreen(viewModel: ChatViewModel, onLogout: () -> Unit, onBack: () -> Uni
                                                 Text(
                                                     text = author,
                                                     style = MaterialTheme.typography.labelSmall,
-                                                    color = otherAuthorColor
+                                                    color = otherAuthorColor,
+                                                    textAlign = TextAlign.Start,
+                                                    modifier = Modifier.fillMaxWidth()
                                                 )
                                             }
                                             if (!author.isNullOrBlank() && isMine) {
                                                 Text(
                                                     text = author,
                                                     style = MaterialTheme.typography.labelSmall,
-                                                    color = ownAuthorColor
+                                                    color = ownAuthorColor,
+                                                    textAlign = TextAlign.End,
+                                                    modifier = Modifier.fillMaxWidth()
                                                 )
                                             }
                                             Text(
                                                 text = text,
                                                 style = MaterialTheme.typography.bodyMedium,
-                                                color = Color(0xFF111111)
+                                                color = if (isMine) ownMessageColor else otherMessageColor,
+                                                textAlign = if (isMine) TextAlign.End else TextAlign.Start,
+                                                modifier = Modifier.fillMaxWidth()
                                             )
                                         }
                                     }
