@@ -138,13 +138,6 @@ class ChatViewModel(userName: String) : ViewModel() {
                     val r = BufferedReader(InputStreamReader(connectedSocket.getInputStream()))
                     val w = BufferedWriter(OutputStreamWriter(connectedSocket.getOutputStream()))
 
-                    withContext(Dispatchers.Main) {
-                        _uiState.update { it.copy(status = "Erabiltzailea bidaltzen") }
-                    }
-                    w.write(currentUserName)
-                    w.newLine()
-                    w.flush()
-
                     socket = connectedSocket
                     reader = r
                     writer = w
