@@ -3,6 +3,7 @@ package com.example.osislogin.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.ViewModelProvider
+import com.example.osislogin.util.ChatCryptoUtil
 import com.example.osislogin.util.ZerbitzariakApiConfig
 import java.io.BufferedReader
 import java.io.BufferedWriter
@@ -162,18 +163,19 @@ class ChatViewModel(userName: String) : ViewModel() {
                         if (shouldIgnoreIncomingLine(line)) {
                             continue
                         }
+                        val displayLine = decryptMessageLine(line)
                         withContext(Dispatchers.Main) {
                             _uiState.update { state ->
                                 val isSystem =
-                                    line.contains("sartu da", ignoreCase = true) ||
-                                        line.contains("atera egin da", ignoreCase = true)
+                                    displayLine.contains("sartu da", ignoreCase = true) ||
+                                        displayLine.contains("atera egin da", ignoreCase = true)
                                 val newUnread =
                                     when {
                                         isChatOpen -> 0
                                         isSystem -> state.unreadCount
                                         else -> state.unreadCount + 1
                                     }
-                                state.copy(messages = state.messages + line, unreadCount = newUnread)
+                                state.copy(messages = state.messages + displayLine, unreadCount = newUnread)
                             }
                         }
                     }
@@ -243,12 +245,34 @@ class ChatViewModel(userName: String) : ViewModel() {
         return false
     }
 
+    private fun decryptMessageLine(line: String): String {
+        val separatorIndex = line.indexOf(':')
+        if (separatorIndex <= 0) return ChatCryptoUtil.decryptIfNeeded(line)
+
+        val author = line.substring(0, separatorIndex).trim()
+        val body = line.substring(separatorIndex + 1).trim()
+        val decryptedBody = ChatCryptoUtil.decryptIfNeeded(body)
+        return "$author: $decryptedBody"
+    }
+
 
 
     fun send(text: String) {
         val msg = text.trim()
         if (msg.isEmpty()) return
-        val fullMessage = "${currentUserName.trim()}: $msg"
+        sendFormattedMessage(msg)
+    }
+
+    fun sendFile(fileName: String, base64Content: String) {
+        val cleanName = fileName.trim().replace("|", "_")
+        val cleanBase64 = base64Content.trim()
+        if (cleanName.isEmpty() || cleanBase64.isEmpty()) return
+        sendFormattedMessage("[FILE]|$cleanName|$cleanBase64")
+    }
+
+    private fun sendFormattedMessage(messageBody: String) {
+        val displayMessage = "${currentUserName.trim()}: $messageBody"
+        val fullMessage = "${currentUserName.trim()}: ${ChatCryptoUtil.encrypt(messageBody)}"
 
         if (!_uiState.value.isConnected) {
             pending.addLast(fullMessage)
@@ -266,7 +290,7 @@ class ChatViewModel(userName: String) : ViewModel() {
                 w.flush()
                 lastSentFullMessage = fullMessage
                 withContext(Dispatchers.Main) {
-                    _uiState.update { state -> state.copy(messages = state.messages + fullMessage) }
+                    _uiState.update { state -> state.copy(messages = state.messages + displayMessage) }
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
