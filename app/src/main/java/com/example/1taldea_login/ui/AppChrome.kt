@@ -49,8 +49,8 @@ fun AppChrome(
     rightBadgeCount: Int = 0,
     content: @Composable (Modifier) -> Unit
 ) {
-    val orange = remember { Color(0xFFF3863A) }
-    val freeColor = remember { Color(0xFF1B345D) }
+    val orange = remember { Color(0xFF16B8B0) }
+    val freeColor = remember { Color(0xFF1F4A7D) }
 
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
@@ -72,7 +72,7 @@ fun AppChrome(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Image(
-                painter = painterResource(R.drawable.logo_osis),
+                painter = painterResource(R.drawable.aja_logo),
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
                 modifier = Modifier.height(100.dp).clickable(onClick = onLogoClick)

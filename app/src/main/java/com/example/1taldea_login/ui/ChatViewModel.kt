@@ -244,8 +244,9 @@ class ChatViewModel(userName: String) : ViewModel() {
 
         val author = line.substring(0, separatorIndex).trim()
         val body = line.substring(separatorIndex + 1).trim()
+        val decryptedAuthor = ChatCryptoUtil.decryptIfNeeded(author)
         val decryptedBody = ChatCryptoUtil.decryptIfNeeded(body)
-        return "$author: $decryptedBody"
+        return "$decryptedAuthor: $decryptedBody"
     }
 
 
@@ -265,7 +266,7 @@ class ChatViewModel(userName: String) : ViewModel() {
 
     private fun sendFormattedMessage(messageBody: String) {
         val displayMessage = "${currentUserName.trim()}: $messageBody"
-        val fullMessage = "${currentUserName.trim()}: ${ChatCryptoUtil.encrypt(messageBody)}"
+        val fullMessage = "${ChatCryptoUtil.encrypt(currentUserName.trim())}: ${ChatCryptoUtil.encrypt(messageBody)}"
 
         if (!_uiState.value.isConnected) {
             pending.addLast(fullMessage)

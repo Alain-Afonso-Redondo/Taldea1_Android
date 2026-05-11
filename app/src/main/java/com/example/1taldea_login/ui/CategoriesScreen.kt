@@ -80,7 +80,7 @@ fun CategoriesScreen(
         Box(modifier = contentModifier.fillMaxSize()) {
             val categories = uiState.categories
             val session = uiState.session
-            val orange = remember { Color(0xFFF3863A) }
+            val orange = remember { Color(0xFF16B8B0) }
             val shape = remember { RoundedCornerShape(18.dp) }
             val elevation = 10.dp
 

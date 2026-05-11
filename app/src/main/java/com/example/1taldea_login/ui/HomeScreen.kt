@@ -68,9 +68,9 @@ fun HomeScreen(
         }
     }
 
-    val orange = remember { Color(0xFFF3863A) }
-    val freeColor = remember { Color(0xFF1B345D) }
-    val occupiedColor = remember { Color(0xFF5B1C1C) }
+    val orange = remember { Color(0xFF16B8B0) }
+    val freeColor = remember { Color(0xFF1F4A7D) }
+    val occupiedColor = remember { Color(0xFF1F4A7D) }
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     val isTabletLandscape = isLandscape && configuration.screenWidthDp >= 840
@@ -82,7 +82,7 @@ fun HomeScreen(
                 verticalAlignment = Alignment.CenterVertically
         ) {
             Image(
-                    painter = painterResource(R.drawable.logo_osis),
+                    painter = painterResource(R.drawable.aja_logo),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.height(100.dp).clickable { viewModel.loadTables() }

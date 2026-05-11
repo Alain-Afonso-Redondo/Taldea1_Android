@@ -147,11 +147,11 @@ fun ChatScreen(viewModel: ChatViewModel, onLogout: () -> Unit, onBack: () -> Uni
         return ChatAttachment(fileName = parts[1], bytes = bytes)
     }
 
-    val ownBubbleColor = remember { Color(0xFF1F6F5F) }
-    val otherBubbleColor = remember { Color(0xFFF3F0EA) }
-    val screenColor = remember { Color(0xFFE9E3D9) }
-    val ownAuthorColor = remember { Color(0xFFBEE9DF) }
-    val otherAuthorColor = remember { Color(0xFF5B5F73) }
+    val ownBubbleColor = remember { Color(0xFF0FA9A7) }
+    val otherBubbleColor = remember { Color(0xFFEAF7F8) }
+    val screenColor = remember { Color(0xFFF4FAFB) }
+    val ownAuthorColor = remember { Color(0xFFCFF5F3) }
+    val otherAuthorColor = remember { Color(0xFF526477) }
     val ownMessageColor = remember { Color.White }
     val otherMessageColor = remember { Color(0xFF111111) }
 
@@ -336,7 +336,7 @@ fun ChatScreen(viewModel: ChatViewModel, onLogout: () -> Unit, onBack: () -> Uni
                     Icon(
                         imageVector = Icons.Filled.AttachFile,
                         contentDescription = "Fitxategia erantsi",
-                        tint = Color(0xFF1C5F2B)
+                        tint = Color(0xFF16B8B0)
                     )
                 }
                 IconButton(
@@ -345,7 +345,7 @@ fun ChatScreen(viewModel: ChatViewModel, onLogout: () -> Unit, onBack: () -> Uni
                         input = ""
                     },
                     enabled = input.isNotBlank(),
-                    modifier = Modifier.size(48.dp).clip(RoundedCornerShape(24.dp)).background(Color(0xFF1C5F2B))
+                    modifier = Modifier.size(48.dp).clip(RoundedCornerShape(24.dp)).background(Color(0xFF16B8B0))
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Send,

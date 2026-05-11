@@ -74,7 +74,7 @@ fun LoginScreen(
                 modifier = Modifier.padding(top = 8.dp, bottom = 8.dp)
             )
             Image(
-                painter = painterResource(R.drawable.logo_osis),
+                painter = painterResource(R.drawable.aja_logo),
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
                 modifier = Modifier
@@ -95,8 +95,8 @@ fun LoginScreen(
                         color = MaterialTheme.colorScheme.secondary
                     )
                 } else {
-                    val leftColor = remember { Color(0xFF1B345D) }
-                    val rightColor = remember { Color(0xFFF3863A) }
+                    val leftColor = remember { Color(0xFF1F4A7D) }
+                    val rightColor = remember { Color(0xFF16B8B0) }
                     if (isLandscape) {
                         LazyRow(
                             modifier = Modifier.fillMaxWidth(),

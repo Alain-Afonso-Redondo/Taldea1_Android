@@ -150,10 +150,10 @@ fun PlaterakScreen(
                         val qty = uiState.pendingQtyByPlateraId[platera.id] ?: committedQty
                         val pendingNote = uiState.pendingNotesByPlateraId[platera.id]
                         val hasNote = !pendingNote.isNullOrBlank() || komandas.any { !it.oharrak.isNullOrBlank() }
-                        val orange = remember { Color(0xFFF3863A) }
+                        val orange = remember { Color(0xFF16B8B0) }
 
                         Surface(
-                            color = Color(0xFF1B345D),
+                            color = Color(0xFF1F4A7D),
                             shape = RoundedCornerShape(14.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -255,7 +255,7 @@ fun PlaterakScreen(
                                         Icon(
                                             imageVector = Icons.Filled.Warning,
                                             contentDescription = null,
-                                            tint = if (hasNote) Color(0xFFF3863A) else Color.White.copy(alpha = 0.35f)
+                                            tint = if (hasNote) Color(0xFF16B8B0) else Color.White.copy(alpha = 0.35f)
                                         )
                                     }
                                 }
@@ -279,7 +279,7 @@ fun PlaterakScreen(
 
             FloatingActionButton(
                 onClick = { viewModel.commitPendingChanges(onDone = onBack) },
-                containerColor = Color(0xFFF3863A),
+                containerColor = Color(0xFF16B8B0),
                 contentColor = Color.White,
                 modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
             ) {

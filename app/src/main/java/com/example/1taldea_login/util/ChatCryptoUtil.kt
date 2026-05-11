@@ -22,14 +22,15 @@ object ChatCryptoUtil {
         cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key(), "AES"), IvParameterSpec(iv))
         val encrypted = cipher.doFinal(plainText.toByteArray(Charsets.UTF_8))
 
-        return PREFIX + Base64.encodeToString(iv + encrypted, Base64.NO_WRAP)
+        return Base64.encodeToString(iv + encrypted, Base64.NO_WRAP)
     }
 
     fun decryptIfNeeded(text: String): String {
-        if (!text.startsWith(PREFIX)) return text
+        if (text.isBlank()) return text
 
         return runCatching {
-            val payload = Base64.decode(text.removePrefix(PREFIX), Base64.DEFAULT)
+            val encryptedText = text.removePrefix(PREFIX)
+            val payload = Base64.decode(encryptedText, Base64.DEFAULT)
             require(payload.size > IV_SIZE)
 
             val iv = payload.copyOfRange(0, IV_SIZE)
